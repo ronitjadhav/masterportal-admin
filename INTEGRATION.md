@@ -29,6 +29,10 @@ setups need CORS + cookie exceptions you simply don't want to manage.
 
 ## 1. Import the portal
 
+> A fresh (empty) database already contains the bundled **`basic`** starting-point
+> portal — auto-seeded on first start (see the README). Skip to step 2 to wire a
+> portal at it, or use this step to import an additional portal/catalog.
+
 ```bash
 python import_portal.py <path-to-portal-folder> <slug>
 ```
@@ -184,10 +188,13 @@ writing the **draft** (publish to go live):
   them to a portal from the **Layers** tab.
 - **Access & roles / Publish / Audit** — as before.
 
-`basic` and `master` in `portal/` are Masterportal's own **example** portals;
-`import_portal.py` loads them for reference/testing. A real deployment creates
-its own portals with **＋ New** (from a minimal starter) — nothing is called
-"basic". Note: `import_portal.py` is an authoritative reset (see below).
+This repo ships a small **`basic`** portal in `seed/basic/` (adapted from a
+Masterportal example) as the auto-seeded starting point — a fresh DB has it
+ready. A real deployment either grows from `basic` or creates its own portals
+with **＋ New** (from a minimal starter) and, if wanted, deletes `basic`. You can
+also `import_portal.py` other Masterportal examples (e.g. `portal/master`, ~6,500
+services) as extra catalogs. Note: `import_portal.py` is an authoritative reset
+(see below).
 
 **Structured forms vs. raw tier:** the Settings/Modules/Tree forms cover the
 common fields; everything else (per-module config like print service id /

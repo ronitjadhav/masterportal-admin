@@ -1,0 +1,436 @@
+{
+  "portalConfig": {
+    "map": {
+      "controls": {
+        "zoom": true,
+        "orientation": {
+          "zoomMode": "once"
+        }
+      },
+      "mapView": {
+        "backgroundImage": "./resources/img/backgroundCanvas.jpeg",
+        "startCenter": [
+          561210,
+          5932600
+        ],
+        "extent": [
+          510000.0,
+          5850000.0,
+          625000.4,
+          6000000.0
+        ],
+        "startZoomLevel": 1
+      },
+      "mouseHover": {
+        "numFeaturesToShow": 2,
+        "infoText": "Exampletext",
+         "highlightOnHover": true,
+          "highlightVectorRulesPolygon": {
+              "fill": {
+                  "color": [255, 255, 255, 0.5]
+              },
+              "stroke": {
+                  "width": 4,
+                  "color": [255, 0, 0, 0.9]
+              }
+          },
+          "highlightVectorRulesPointLine": {
+              "stroke": {
+                  "width": 8,
+                  "color": [255, 0, 255, 0.9]
+              },
+              "image": {
+                  "scale": 2
+              }
+          }
+      }
+    },
+    "portalFooter": {
+      "urls": [
+        {
+          "bezeichnung": "common:modules.portalFooter.designation",
+          "url": "https://geoinfo.hamburg.de/",
+          "alias": "Landesbetrieb Geoinformation und Vermessung",
+          "alias_mobile": "LGV"
+        }
+      ]
+    },
+    "tree": {
+      "highlightedFeatures": {
+        "active": true
+      }
+    },
+    "mainMenu": {
+      "expanded": true,
+      "title": {
+        "text": "Basic",
+        "logo": "./resources/img/mp_logo.png",
+        "link": "https://masterportal.org",
+        "toolTip": "Masterportal"
+      },
+      "searchBar": {
+        "searchInterfaces": [
+          {
+            "type": "komootPhoton",
+            "minChars": 3,
+            "serviceId": "11",
+            "limit": 10,
+            "lang": "de",
+            "lat": 53.6,
+            "lon": 10.0,
+            "bbox": "9.6,53.3,10.4,53.8"
+          },
+          {
+            "type": "visibleVector",
+            "resultEvents": {
+              "onClick": [
+                "openGetFeatureInfo",
+                "setMarker",
+                "zoomToResult"
+              ],
+              "onHover": [
+                "setMarker"
+              ]
+            }
+          },
+          {
+            "type": "topicTree",
+            "hitTemplate": "layer"
+          }
+        ]
+      },
+      "sections": [
+        [
+          {
+            "type": "fileImport"
+          },
+          {
+            "type": "openConfig"
+          },
+          {
+            "type": "contact",
+            "serviceId": "80001",
+            "includeSystemInfo": true,
+            "from": [
+              {
+                "email": "lgvgeoportal-hilfe@gv.hamburg.de",
+                "name": "LGVGeoportalHilfe"
+              }
+            ],
+            "to": [
+              {
+                "email": "lgvgeoportal-hilfe@gv.hamburg.de",
+                "name": "LGVGeoportalHilfe"
+              }
+            ]
+          },
+          {
+            "type": "language"
+          },
+           {
+            "type": "about",
+            "title": "Portal basic",
+            "abstractText": "Dies ist ein simples Portal.<br><br>Die erforderlichen Ressource-Dateien liegen lokal.<br>Der Themenbaum ist einfach.",
+            "metaUrl": "https://metaver.de/trefferanzeige?docuuid=40D48B03-AD1D-407B-B04D-B5BC6855BE15",
+            "metaId": "40D48B03-AD1D-407B-B04D-B5BC6855BE15",
+            "contact":{
+              "name":"Erika Mustermann",
+              "positionName": ["<small>Abteilung A</small>", "<small>Teamlead</small>"],
+              "street":"Neuenfelder Straße 19",
+              "postalCode":"21109",
+              "city":"Hamburg",
+              "email":"email@email.de"
+            }
+          }
+        ]
+      ]
+    },
+    "secondaryMenu": {
+      "expanded": false,
+      "sections": [
+        [
+          {
+            "delete": true,
+            "update": true,
+            "multiUpdate": [
+              {
+                "layerId": "lgvpoint",
+                "available": true,
+                "configAttributes": ["name"],
+                "controlAttributes": ["gemeinde"]
+              }
+            ],
+            "type": "wfst",
+            "name": "WFS-T Tool",
+            "layerIds": [
+              "lgvpolygon",
+              "lgvpoint",
+              "lgvline",
+              "1122"
+            ],
+            "toggleLayer": false,
+            "lineButton": [
+              {
+                "layerId": "lgvline",
+                "available": true
+              }
+            ],
+            "pointButton": [
+              {
+                "layerId": "lgvpoint",
+                "available": true
+              }
+            ],
+            "polygonButton": [
+              {
+                "layerId": "lgvpolygon",
+                "available": true
+              }
+            ],
+            "multipolygonButton": [ 
+              { 
+                "layerId": "1122", 
+                "available": true
+              }
+            ]
+          },
+          {
+            "type": "legend"
+          },
+          {
+            "type": "scaleSwitcher"
+          },
+          {
+            "type": "shareView"
+          },
+          {
+            "type": "measure"
+          },
+          {
+            "type": "coordToolkit",
+            "heightLayerId": "19173",
+            "heightElementName": "value_0",
+            "heightValueWater": "-20",
+            "heightValueBuilding": "200",
+            "zoomLevel": 5
+          },
+          {
+            "type": "bufferAnalysis"
+          },
+          {
+            "type": "layerSlider",
+            "layerIds": [
+              {
+                "title": "common:modules.layerSlider.serviceOne",
+                "layerId": "19173"
+              },
+              {
+                "title": "common:modules.layerSlider.serviceTwo",
+                "layerId": "2426"
+              },
+              {
+                "title": "common:modules.layerSlider.serviceThree",
+                "layerId": "8712.2"
+              },
+              {
+                "title": "common:modules.layerSlider.serviceFour",
+                "layerId": "1711"
+              }
+            ]
+          },
+          {
+            "type": "layerClusterToggler",
+            "layerIdList": [
+              "8712.1",
+              "8712.2",
+              "8712.3",
+              "8712.4"
+            ]
+          }
+        ]
+      ]
+    }
+  },
+  "layerConfig": {
+    "baselayer": {
+      "elements": [
+        {
+          "id": "453",
+          "visibility": true
+        },
+        {
+          "id": "34127",
+          "time": false
+        },
+        {
+          "id": "33780",
+          "name": "Geobasiskarten (farbig)"
+        },
+        {
+          "id": "topplus_wmts",
+          "name": "TopPlusOpen (WMTS)",
+          "typ": "WMTS",
+          "visibility": false,
+          "showInLayerTree": true
+        }
+      ]
+    },
+    "subjectlayer": {
+      "elements": [
+        {
+          "id": [ "3302", "4561"],
+          "name": "WMS-Gruppe Trinkwasser und Eventlotse (min-/maxScale 1:1.000 - 1:10.000)",
+          "typ": "GROUP",
+          "visibility": true,
+          "showInLayerTree": true
+        },
+        {
+          "id": "lgvline",
+          "name": "wfst_linie_test",
+          "visibility": false,
+          "typ": "WFS"
+        },
+        {
+          "id": "lgvpoint",
+          "name": "wfst_punkt_test",
+          "visibility": false,
+          "typ": "WFS"
+        },
+        {
+          "id": "lgvpolygon",
+          "name": "wfst_polygon_test",
+          "visibility": false,
+          "typ": "WFS"
+        },
+        {
+          "id": "1122",
+          "name": "Test WFS-T LGV + Multipolygon",
+          "visibility": false,
+          "typ": "WFS"
+        },
+        {
+          "id": "2426",
+          "name": "WMS Bezirke",
+          "layerAttribution": "<span>Hier Text angeben, der angezeigt wird sobald der Layer sichtbar ist.</span>"
+        },
+        {
+          "id": "2003",
+          "name": "WFS Schutzgebiete",
+          "styleId":"diagonal-right",
+          "mouseHoverField": "gebietsname"
+        },
+        {
+          "id": "10882",
+          "name": "WFS Bike and Ride Parkplätze",
+          "styleId": "10882",
+          "clusterDistance": 40,
+          "styleGeometryType": [
+            "Point"
+          ]
+        },
+        {
+          "id": "1711",
+          "name": "WFS Krankenhäuser",
+          "styleId": "1711",
+          "mouseHoverField": "name",
+          "searchField": "name"
+        },
+        {
+          "id": "8712",
+          "name": "WFS Schulen",
+          "styleId": "8712",
+          "mouseHoverField": [
+            "schulname",
+            "kapitelbezeichnung"
+          ],
+          "searchField": [
+            "schulname",
+            "fremdsprache"
+          ],
+           "datasets": [
+            {
+            "customMetadata": true,
+            "xmd_id": "82c501bc-5a4e-40d5-be55-7e89dbbfbmay",
+            "csw_url": "./resources/metadata/csw.xml",
+            "md_name": "custom metadata example",
+            "attributes":
+            {
+              "Original-Titel über customMetadata": "GetRecordByIdResponse.MD_Metadata.identificationInfo.MD_DataIdentification.citation.CI_Citation.title.CharacterString"
+            }
+          }
+          ]
+        },
+        {
+          "id": "4560",
+          "name": "WFS Polygon (Default Style)"
+        },
+        {
+          "id": "1132",
+          "name": "WFS Point (Default Style)"
+        },
+        {
+          "id": "1133",
+          "name": "WFS Line (Default Style)"
+        },
+        {
+          "id": "18105",
+          "name": "STA Anzahl frei verfügbarer Fahrräder je StadtRad-Station"
+        },
+        {
+          "id": "8712.1",
+          "styleId": "8712.1",
+          "name": "Grundschulen",
+          "wfsFilter": "resources/xml/schulstandort.staatlich.5.grundschulen.xml",
+          "typ": "WFS",
+          "visibility": false,
+          "clusterDistance": 60,
+          "mouseHoverField": [
+            "schulname",
+            "kapitelbezeichnung"
+          ],
+          "showInLayerTree": true
+        },
+        {
+          "id": "8712.2",
+          "styleId": "8712.2",
+          "name": "Stadtteilschulen",
+          "wfsFilter": "resources/xml/schulstandort.staatlich.5.stadtteilschulen.xml",
+          "typ": "WFS",
+          "visibility": false,
+          "clusterDistance": 60,
+          "mouseHoverField": [
+            "schulname",
+            "kapitelbezeichnung"
+          ],
+          "showInLayerTree": true
+        },
+        {
+          "id": "8712.3",
+          "styleId": "8712.3",
+          "name": "Gymnasien",
+          "wfsFilter": "resources/xml/schulstandort.staatlich.5.gymnasien.xml",
+          "typ": "WFS",
+          "visibility": false,
+          "clusterDistance": 60,
+          "mouseHoverField": [
+            "schulname",
+            "kapitelbezeichnung"
+          ]
+        },
+        {
+          "id": "8712.4",
+          "styleId": "8712.4",
+          "name": "Sonderschulen",
+          "wfsFilter": "resources/xml/schulstandort.staatlich.5.sonderschulen.xml",
+          "typ": "WFS",
+          "visibility": false,
+          "clusterDistance": 60,
+          "mouseHoverField": [
+            "schulname",
+            "kapitelbezeichnung"
+          ]
+        }
+      ]
+    }
+  }
+}

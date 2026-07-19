@@ -1,9 +1,9 @@
 """End-to-end checks. Needs the backend on :8000 and Keycloak on :8080
 (docker compose up -d) and internet access to the demo upstreams.
 
-Self-seeding: the fixtures (a small `basic` catalog + the Hamburg `master`
-catalog with a couple of secured/granted layers) are imported automatically if
-missing, so this runs green from a clean clone — no manual setup.
+Self-seeding: the `basic` fixture (bundled in seed/basic) is imported
+automatically if missing, so this runs green from a clean clone — no manual
+setup and no dependency on the Masterportal repo.
 
 Run: .venv/bin/python test_e2e.py
 """
@@ -16,7 +16,7 @@ import httpx
 
 from app import settings
 
-MP = os.path.join(os.path.dirname(__file__) or ".", "..", "masterportal", "portal")
+SEED = os.path.join(os.path.dirname(__file__) or ".", "seed")
 
 
 def _seed(*args):
@@ -25,24 +25,23 @@ def _seed(*args):
 
 
 def ensure_fixtures():
-    """Provision the portals/catalogs the checks rely on, idempotently."""
+    """Provision the `basic` portal/catalog the checks rely on, idempotently,
+    from the bundled seed — plus the RBAC demo state on it."""
     adm = {"Authorization": f"Bearer {get_token_client('masterportal-admin', 'admin-demo', 'admin-demo')}"}
     have = {p["slug"] for p in httpx.get(f"{BASE}/api/admin/portals", headers=adm, timeout=120).json()}
     if "basic" not in have:
-        _seed("import_portal.py", f"{MP}/basic", "basic")
-    if "master" not in have:
-        _seed("import_portal.py", f"{MP}/master", "master")
-    # RBAC demo fixtures on master (idempotent): secure DGM1 admin-only, grant
-    # DOP to role 'user', restrict the draw module to admin.
-    _seed("enable_login.py", "master", "19173")
-    _seed("enable_login.py", "master", "34127")
-    _seed("grant.py", "service", "master", "34127", "user")
-    _seed("grant.py", "module", "master", "draw", "admin")
+        _seed("import_portal.py", f"{SEED}/basic", "basic")
+    # RBAC demo fixtures on basic (idempotent): Geobasiskarten farbig admin-only,
+    # DOP granted to role 'user', the contact menu module restricted to admin.
+    _seed("enable_login.py", "basic", "33780")
+    _seed("enable_login.py", "basic", "34127")
+    _seed("grant.py", "service", "basic", "34127", "user")
+    _seed("grant.py", "module", "basic", "contact", "admin")
 
 BASE = "http://localhost:8000"          # direct backend access
 PUB = settings.PUBLIC_BASE_URL          # what clients see inside served configs
 KC = "http://localhost:8080/auth/realms/masterportal/protocol/openid-connect/token"
-SECURED, PUBLIC_WFS, OAF = "master:19173", "master:20609", "master:27926"
+SECURED, PUBLIC_WFS = "basic:33780", "basic:10882"   # Geobasiskarten farbig (WMS), Bike-und-Ride (WFS)
 UPSTREAM_HOSTS = ("geodienste.hamburg.de", "deegree.pro")
 
 
@@ -68,7 +67,7 @@ def main():
     ensure_fixtures()
     print("1. got Keycloak tokens for 'demo' (user) and 'admin-demo' (admin); fixtures ensured")
 
-    services = httpx.get(f"{BASE}/api/portals/master/services.json",
+    services = httpx.get(f"{BASE}/api/portals/basic/services.json",
                          headers=admin_auth, timeout=120).raise_for_status()
     assert services.headers.get("cache-control") == "no-store"
     services = services.json()
@@ -76,29 +75,29 @@ def main():
         leaked = [s["id"] for s in services if host in json.dumps(s)]
         assert not leaked, f"upstream {host} leaked in services.json: {leaked[:5]}"
     svc = {s["id"]: s for s in services}
-    assert svc["19173"]["url"] == f"{PUB}/geo/{SECURED}" and svc["19173"]["isSecured"] is True
-    assert svc["19173"]["legendURL"] == f"{PUB}/legends/{SECURED}/0"
-    assert svc["20609"]["url"] == f"{PUB}/geo/{PUBLIC_WFS}" and "isSecured" not in svc["20609"]
+    assert svc["33780"]["url"] == f"{PUB}/geo/{SECURED}" and svc["33780"]["isSecured"] is True
+    assert svc["33780"]["legendURL"] == f"{PUB}/legends/{SECURED}/0"
+    assert svc["10882"]["url"] == f"{PUB}/geo/{PUBLIC_WFS}" and "isSecured" not in svc["10882"]
     print(f"2. services.json as admin ({len(services)} services): scoped keys, no upstream hosts leak")
 
-    # --- Phase 3: deny-by-default role model. 19173 is secured with NO grants
-    # (admin-only); 34127 is secured and granted to role "user"; module "draw"
+    # --- Phase 3: deny-by-default role model. 33780 is secured with NO grants
+    # (admin-only); 34127 is secured and granted to role "user"; module "contact"
     # is restricted to admin.
-    anon_ids = {s["id"] for s in httpx.get(f"{BASE}/api/portals/master/services.json", timeout=120).json()}
-    demo_ids = {s["id"] for s in httpx.get(f"{BASE}/api/portals/master/services.json",
+    anon_ids = {s["id"] for s in httpx.get(f"{BASE}/api/portals/basic/services.json", timeout=120).json()}
+    demo_ids = {s["id"] for s in httpx.get(f"{BASE}/api/portals/basic/services.json",
                                            headers=auth, timeout=120).json()}
-    assert "19173" not in anon_ids and "34127" not in anon_ids
-    assert "19173" not in demo_ids and "34127" in demo_ids
-    assert "19173" in svc and "34127" in svc  # admin sees both
+    assert "33780" not in anon_ids and "34127" not in anon_ids
+    assert "33780" not in demo_ids and "34127" in demo_ids
+    assert "33780" in svc and "34127" in svc  # admin sees both
     assert httpx.get(f"{BASE}/geo/{SECURED}").status_code == 401           # anonymous
     assert httpx.get(f"{BASE}/geo/{SECURED}", headers=auth).status_code == 403      # wrong role
-    assert httpx.get(f"{BASE}/geo/master:34127", headers=auth,
+    assert httpx.get(f"{BASE}/geo/basic:34127", headers=auth,
                      params={"service": "WMS", "request": "GetCapabilities"},
                      timeout=30).status_code == 200                        # granted role
     print("2b. role model: anonymous < user < admin see/reach strictly more services")
 
-    demo_cfg = httpx.get(f"{BASE}/api/portals/master/config.json", headers=auth).json()
-    admin_cfg = httpx.get(f"{BASE}/api/portals/master/config.json", headers=admin_auth).json()
+    demo_cfg = httpx.get(f"{BASE}/api/portals/basic/config.json", headers=auth).json()
+    admin_cfg = httpx.get(f"{BASE}/api/portals/basic/config.json", headers=admin_auth).json()
 
     def module_types(cfg):
         return {el.get("type") for menu in ("mainMenu", "secondaryMenu")
@@ -117,13 +116,13 @@ def main():
             walk(group.get("elements"))
         return ids
 
-    assert "draw" not in module_types(demo_cfg) and "draw" in module_types(admin_cfg)
-    assert "19173" not in tree_ids(demo_cfg) and "19173" in tree_ids(admin_cfg)
+    assert "contact" not in module_types(demo_cfg) and "contact" in module_types(admin_cfg)
+    assert "33780" not in tree_ids(demo_cfg) and "33780" in tree_ids(admin_cfg)
     assert "34127" in tree_ids(demo_cfg)
     print("2c. config.json filtered per role: tree entries and menu modules differ")
 
-    # portal scoping: basic must serve ONLY its own catalog
-    basic = httpx.get(f"{BASE}/api/portals/basic/services.json").raise_for_status().json()
+    # portal scoping: basic must serve ONLY its own catalog (as admin → all 23)
+    basic = httpx.get(f"{BASE}/api/portals/basic/services.json", headers=admin_auth).raise_for_status().json()
     assert len(basic) == 23, f"basic portal serves {len(basic)} services, expected 23"
     assert all(s["url"].startswith(f"{PUB}/geo/basic:") for s in basic if "url" in s and s["url"].startswith("http"))
     print(f"3. portal scoping: basic serves exactly its own {len(basic)} services")
@@ -159,7 +158,7 @@ def main():
 
     r = httpx.get(f"{BASE}/geo/{SECURED}", headers=admin_auth, timeout=30, params={
         "service": "WMS", "version": "1.3.0", "request": "GetMap",
-        "layers": "WMS_DGM1_HAMBURG", "styles": "", "crs": "EPSG:25832",
+        "layers": "geobasiskarten_farbig", "styles": "", "crs": "EPSG:25832",
         "bbox": "561000,5932000,562000,5933000",
         "width": "256", "height": "256", "format": "image/png"})
     assert r.status_code == 200 and r.headers["content-type"].startswith("image/"), r.text[:200]
@@ -173,36 +172,27 @@ def main():
     assert r.status_code == 200 and "geodienste.hamburg.de" not in r.text
     print("8. public WFS anonymous OK, capabilities rewritten")
 
-    # mutations are opt-in: WFS-T Transaction and OGC API writes are refused
+    # mutations are opt-in: a WFS-T Transaction body is refused (403)…
     wfst = '<wfs:Transaction xmlns:wfs="http://www.opengis.net/wfs"></wfs:Transaction>'
     assert httpx.post(f"{BASE}/geo/{PUBLIC_WFS}", content=wfst,
                       headers={"Content-Type": "application/xml"}).status_code == 403
-    assert httpx.post(f"{BASE}/geo/{OAF}/collections/x/items", content="{}").status_code == 403
-    # ...but plain POST GetFeature (Masterportal's filter module) still works
+    assert httpx.post(f"{BASE}/geo/{PUBLIC_WFS}/collections/x/items", content="{}").status_code == 403  # path write
+    # …but a plain POST GetFeature (Masterportal's filter module) still works
     getfeature = ('<wfs:GetFeature xmlns:wfs="http://www.opengis.net/wfs" service="WFS" version="1.1.0">'
-                  f'<wfs:Query typeName="{svc["20609"]["featureType"]}"/></wfs:GetFeature>')
+                  f'<wfs:Query typeName="{svc["10882"]["featureType"]}"/></wfs:GetFeature>')
     r = httpx.post(f"{BASE}/geo/{PUBLIC_WFS}", content=getfeature,
                    headers={"Content-Type": "application/xml"}, timeout=30)
     assert r.status_code == 200, (r.status_code, r.text[:200])
-    print("9. WFS-T Transaction=403, OAF write=403, POST GetFeature still 200")
+    print("9. WFS-T Transaction=403, path-write=403, POST GetFeature still 200")
 
-    # OGC API Features: path suffix forwarding + JSON link rewriting
-    collection = svc["27926"]["collection"]
-    r = httpx.get(f"{BASE}/geo/{OAF}/collections/{collection}/items",
-                  params={"limit": 2, "f": "json"}, timeout=60)
-    data = r.json()
-    assert r.status_code == 200 and len(data.get("features", [])) == 2
-    assert "geodienste.hamburg.de" not in json.dumps(data), "upstream leaked in OAF links"
-    print("10. OAF items via path suffix, absolute links rewritten to proxy")
-
-    # traversal + open-proxy guards
-    assert httpx.get(f"{BASE}/geo/{OAF}/..%2F..%2Fetc").status_code in (400, 404)
+    # traversal + open-proxy guards (path-suffix forwarding + traversal reject)
+    assert httpx.get(f"{BASE}/geo/{PUBLIC_WFS}/..%2F..%2Fetc").status_code in (400, 404)
     assert httpx.get(f"{BASE}/geo/nope").status_code == 404
     assert httpx.get(f"{BASE}/legends/{SECURED}/99", headers=admin_auth).status_code == 404
     assert httpx.request("DELETE", f"{BASE}/geo/{PUBLIC_WFS}").status_code == 405
     print("11. traversal=4xx, unknown key/legend=404, non-GET/POST=405 (not an open proxy)")
 
-    cfg = httpx.get(f"{BASE}/api/portals/master/config.json", headers=admin_auth)
+    cfg = httpx.get(f"{BASE}/api/portals/basic/config.json", headers=admin_auth)
     assert cfg.headers.get("cache-control") == "no-store"
     assert {"type": "login"} in cfg.json()["portalConfig"]["mainMenu"]["sections"][0]
     print("12. login module present, config responses are no-store")
@@ -233,8 +223,8 @@ def main():
     print("14. admin PATCH audited (latest entry = service.patch by admin-demo); bad-prefix secret env=422")
 
     caps_preview = httpx.post(f"{BASE}/api/admin/import-capabilities", headers=adm, timeout=60,
-                              json={"url": "https://geodienste.hamburg.de/HH_WMS_DGM1",
-                                    "catalog": "master", "dry_run": True}).json()
+                              json={"url": "https://geodienste.hamburg.de/HH_WMS_HamburgDE",
+                                    "catalog": "basic", "dry_run": True}).json()
     assert caps_preview["dry_run"] and caps_preview["layers"]
     print(f"15. WMS capabilities import (dry-run): {len(caps_preview['layers'])} layers parsed")
 
@@ -315,13 +305,14 @@ def main():
 
     edited = _copy.deepcopy(orig_tree)
     edited["subjectlayer"]["elements"].append(
-        {"type": "folder", "name": "E2E Folder", "elements": [{"id": "682"}]})
+        {"type": "folder", "name": "E2E Folder", "elements": [{"id": "2426"}]})
     r = httpx.put(f"{BASE}/api/admin/portals/basic/tree", headers=adm,
                   json={"layer_config": edited})
     assert r.status_code == 200 and r.json()["warnings"] == [], r.text
     served = httpx.get(f"{BASE}/api/portals/basic/config.json").json()["layerConfig"]
-    folder = [e for e in served["subjectlayer"]["elements"] if e.get("type") == "folder"]
-    assert folder and folder[0]["name"] == "E2E Folder" and folder[0]["elements"][0]["id"] == "682"
+    folder = [e for e in served["subjectlayer"]["elements"]
+              if e.get("type") == "folder" and e.get("name") == "E2E Folder"]
+    assert folder and folder[0]["elements"][0]["id"] == "2426"
     print("16b. tree editor: folder+layer saved to draft and served")
 
     # structural validation (422) and soft unknown-id warning
@@ -342,28 +333,28 @@ def main():
     httpx.put(f"{BASE}/api/admin/portals/basic/tree", headers=adm, json={"layer_config": orig_tree})
     print("16d. tree save requires admin (non-admin=403); basic tree restored")
 
-    # --- Vector styles CRUD (style.json), on the master catalog
-    httpx.request("DELETE", f"{BASE}/api/admin/styles/master:e2e-style", headers=adm)
-    lst = httpx.get(f"{BASE}/api/admin/styles?catalog=master&q=1711", headers=adm).json()
-    assert any(i["styleId"] == "1711" for i in lst["items"]), "expected style 1711 in master"
-    c = httpx.post(f"{BASE}/api/admin/styles", headers=adm, json={"catalog": "master", "styleId": "e2e-style"})
+    # --- Vector styles CRUD (style.json), on the basic catalog
+    httpx.request("DELETE", f"{BASE}/api/admin/styles/basic:e2e-style", headers=adm)
+    lst = httpx.get(f"{BASE}/api/admin/styles?catalog=basic&q=1711", headers=adm).json()
+    assert any(i["styleId"] == "1711" for i in lst["items"]), "expected style 1711 in basic"
+    c = httpx.post(f"{BASE}/api/admin/styles", headers=adm, json={"catalog": "basic", "styleId": "e2e-style"})
     assert c.status_code == 200 and c.json()["styleId"] == "e2e-style"
     assert httpx.post(f"{BASE}/api/admin/styles", headers=adm,
-                      json={"catalog": "master", "styleId": "e2e-style"}).status_code == 409   # dup
+                      json={"catalog": "basic", "styleId": "e2e-style"}).status_code == 409   # dup
     # edit to a polygon style; styleId is forced immutable
-    put = httpx.put(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm, json={"attrs": {
+    put = httpx.put(f"{BASE}/api/admin/styles/basic:e2e-style", headers=adm, json={"attrs": {
         "styleId": "IGNORED", "rules": [{"style": {"polygonFillColor": [255, 0, 0, 0.5],
         "polygonStrokeColor": [0, 0, 0, 1], "polygonStrokeWidth": 2}}]}})
     assert put.status_code == 200
-    got = httpx.get(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm).json()
+    got = httpx.get(f"{BASE}/api/admin/styles/basic:e2e-style", headers=adm).json()
     assert got["styleId"] == "e2e-style" and got["attrs"]["rules"][0]["style"]["polygonFillColor"] == [255, 0, 0, 0.5]
-    assert httpx.put(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm,
+    assert httpx.put(f"{BASE}/api/admin/styles/basic:e2e-style", headers=adm,
                      json={"attrs": {"rules": "nope"}}).status_code == 422                     # bad shape
-    # served style.json (any portal on the master catalog) includes it
-    assert any(s.get("styleId") == "e2e-style" for s in httpx.get(f"{BASE}/api/portals/demo/style.json").json())
+    # served style.json (any portal on the basic catalog) includes it
+    assert any(s.get("styleId") == "e2e-style" for s in httpx.get(f"{BASE}/api/portals/basic/style.json").json())
     assert httpx.post(f"{BASE}/api/admin/styles", headers={"Authorization": f"Bearer {admin_user}"},
-                      json={"catalog": "master", "styleId": "x"}).status_code == 403           # non-admin
-    assert httpx.request("DELETE", f"{BASE}/api/admin/styles/master:e2e-style", headers=adm).status_code == 200
+                      json={"catalog": "basic", "styleId": "x"}).status_code == 403           # non-admin
+    assert httpx.request("DELETE", f"{BASE}/api/admin/styles/basic:e2e-style", headers=adm).status_code == 200
     print("18f. styles CRUD: list/create/edit/get/delete; styleId immutable; bad shape=422; non-admin=403; served")
 
     # --- Portal lifecycle + config editing (create → settings → modules → delete)

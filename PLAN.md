@@ -261,11 +261,15 @@ configure** portals, not toggle pre-baked ones.
   skin/color engine. "Create a new theme" therefore means "create a new
   portal."
 
-### Seeding
-Ship **one clean default portal** created from a minimal starter config
-(not named "basic"), bound to a catalog of services. `basic`/`master` remain
-*optional* example imports via `import_portal.py` for reference/testing, never
-the default identity.
+### Seeding (revised — shipped)
+Ship **one clean starting-point portal, `basic`**, bundled self-contained in
+`seed/basic/` (config + services + styles, ~80 KB, adapted from the Masterportal
+example) and **auto-seeded on an empty DB** (`app/seed.py`, idempotent) so a
+fresh clone works with zero setup and no dependency on the Masterportal repo. All
+layers start public; the operator secures/grows from there or creates new portals
+with **＋ New** and can delete `basic`. `master` (and other examples) remain
+*optional* imports via `import_portal.py`. The e2e suite self-seeds `basic` from
+the same bundle, so tests are green from a clean checkout.
 
 ### Config coverage — what the admin exposes
 `portalConfig` is large (full field inventory in the research reports). We

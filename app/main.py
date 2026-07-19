@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
-from . import access, admin, configsrc, logging_setup, proxy, ratelimit, settings
+from . import access, admin, configsrc, logging_setup, proxy, ratelimit, seed, settings
 from .auth import current_user
 from .db import Portal, PortalRole, db_session, init_db
 
@@ -26,6 +26,7 @@ _config_rate = ratelimit.limiter(settings.CONFIG_RATE_PER_MIN)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()          # runs Alembic migrations
+    seed.seed_if_empty()   # first-run: bundled 'basic' portal on an empty DB
     yield
     await proxy.client.aclose()
 

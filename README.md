@@ -64,12 +64,14 @@ docker compose up -d          # dev Keycloak with pre-imported realm (see below)
 # upgraded in place — no dropping the DB on schema changes). To run it
 # manually: `alembic upgrade head`.
 
-# seed a services CATALOG from a Masterportal example (reads its config.js,
-# resolves local or remote catalogs — master pulls Hamburg's ~6,500 services)
-python import_portal.py ../masterportal/portal/master master
-
-# start the API (runs `alembic upgrade head`, then serves)
+# start the API (runs `alembic upgrade head`, then serves). On an EMPTY DB it
+# auto-seeds the bundled `basic` starting-point portal (seed/basic/) — 23
+# services, 11 styles, a ready layer tree — so a fresh clone works immediately.
 uvicorn app.main:app --reload
+
+# (optional) import additional catalogs from any Masterportal example — reads
+# its config.js, resolves local or remote catalogs (master pulls Hamburg's ~6,500):
+#   python import_portal.py ../masterportal/portal/master master
 
 # end-to-end checks (authz, URL-hiding, live proxy, snapshots, styles, rate
 # limits, migrations, gzip, logging…). Self-seeds its fixtures if missing,
@@ -90,7 +92,8 @@ origin** (dev: the vite proxy `masterportal/devtools/proxyconf.json`; prod:
 nginx). A worked example lives in the Masterportal repo at
 `portal/backend-demo/` (its `config.js` points at the `demo` portal). Full
 step-by-step for any portal — including creating a fresh one on a new project
-— is in **[INTEGRATION.md](INTEGRATION.md)**.
+— is in **[INTEGRATION.md](INTEGRATION.md)**. The example's `config.js` points at
+the auto-seeded `basic` portal, so it works right after a first start.
 
 ```bash
 cd ../masterportal && npm start   # then open https://localhost:9001/portal/backend-demo/
@@ -102,12 +105,31 @@ server, not the backend.
 
 ## Login in the browser
 
-With backend + Keycloak up, open the demo portal — the menu has a **Login**
-entry (Keycloak `demo` / `demo`, or `admin-demo` / `admin-demo`). Layers marked
-login-only show a lock and load only once you're signed in (Masterportal then
-attaches the bearer token, which the proxy verifies). In the shipped `demo`
-portal, **Krankenhäuser** is such a layer, granted to role `user`. Reload the
-page after logging in — Masterportal only reads config at startup.
+With backend + Keycloak up, open the portal — the menu has a **Login** entry
+(Keycloak `demo` / `demo`, or `admin-demo` / `admin-demo`). The bundled `basic`
+starting point ships **all layers public**. To see the login flow, mark a layer
+login-only and grant it to a role — e.g. **Krankenhäuser** (service id `1711`):
+
+```bash
+python enable_login.py basic 1711        # layer now needs a verified token
+python grant.py service basic 1711 user  # …plus the 'user' role
+```
+
+or do the same in the console (**Layers** → the layer → *Require login* / grants).
+The layer then shows a lock and loads only once you're signed in (Masterportal
+attaches the bearer token, which the proxy verifies). Reload after logging in —
+Masterportal only reads config at startup.
+
+## Starting point (bundled seed)
+
+The repo ships one small, self-contained portal in **`seed/basic/`** (config +
+services + styles, ~80 KB, all public). On an **empty** database the app imports
+it automatically on first start, so a fresh clone has a working portal with a
+real layer tree, 23 services and 11 styles — no manual import, no dependency on
+the Masterportal repo. It's idempotent: if any portal already exists, seeding is
+skipped. Grow from there in the console (add layers, secure them, create more
+portals) or import more catalogs with `import_portal.py`. To reset to the clean
+starting point, delete `admin.db` (SQLite) and restart.
 
 ## Database
 
@@ -137,7 +159,7 @@ in whatever database/schema the URL names:
 ```bash
 export DATABASE_URL="postgresql+psycopg://USER:PASS@your-host:5432/YOUR_DB"
 alembic upgrade head          # or just start the app — it does this itself
-python import_portal.py ../masterportal/portal/basic default   # seed as usual
+# an empty DB auto-seeds the bundled `basic` portal on first start (see below)
 ```
 
 Notes: the driver is `psycopg` (v3) → use the `postgresql+psycopg://` prefix.
