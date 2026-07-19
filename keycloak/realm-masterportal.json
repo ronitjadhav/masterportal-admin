@@ -1,0 +1,95 @@
+{
+    "realm": "masterportal",
+    "enabled": true,
+    "registrationAllowed": false,
+    "bruteForceProtected": true,
+    "roles": {
+        "realm": [
+            {"name": "admin", "description": "may use the admin API/UI"},
+            {"name": "user", "description": "regular portal user"}
+        ]
+    },
+    "users": [
+        {
+            "username": "demo",
+            "enabled": true,
+            "email": "demo@example.com",
+            "emailVerified": true,
+            "firstName": "Demo",
+            "lastName": "User",
+            "credentials": [{"type": "password", "value": "demo", "temporary": false}],
+            "realmRoles": ["user"]
+        },
+        {
+            "username": "admin-demo",
+            "enabled": true,
+            "email": "admin-demo@example.com",
+            "emailVerified": true,
+            "firstName": "Admin",
+            "lastName": "Demo",
+            "credentials": [{"type": "password", "value": "admin-demo", "temporary": false}],
+            "realmRoles": ["user", "admin"]
+        }
+    ],
+    "clients": [
+        {
+            "clientId": "masterportal",
+            "name": "Masterportal portal users (public client, PKCE)",
+            "protocol": "openid-connect",
+            "publicClient": true,
+            "standardFlowEnabled": true,
+            "directAccessGrantsEnabled": true,
+            "redirectUris": [
+                "https://localhost:9001/*",
+                "http://localhost:9001/*"
+            ],
+            "webOrigins": ["https://localhost:9001", "http://localhost:9001"],
+            "attributes": {
+                "pkce.code.challenge.method": "S256",
+                "post.logout.redirect.uris": "+"
+            },
+            "protocolMappers": [
+                {
+                    "name": "masterportal-api-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.custom.audience": "masterportal-api",
+                        "access.token.claim": "true",
+                        "id.token.claim": "false"
+                    }
+                }
+            ],
+            "defaultClientScopes": ["basic", "profile", "email", "roles", "web-origins"]
+        },
+        {
+            "clientId": "masterportal-admin",
+            "name": "Admin UI (separate client — portal tokens are NOT valid for /api/admin)",
+            "protocol": "openid-connect",
+            "publicClient": true,
+            "standardFlowEnabled": true,
+            "directAccessGrantsEnabled": true,
+            "redirectUris": ["https://localhost:9001/admin/*"],
+            "webOrigins": ["https://localhost:9001"],
+            "attributes": {
+                "pkce.code.challenge.method": "S256",
+                "post.logout.redirect.uris": "+"
+            },
+            "protocolMappers": [
+                {
+                    "name": "masterportal-admin-api-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.custom.audience": "masterportal-admin-api",
+                        "access.token.claim": "true",
+                        "id.token.claim": "false"
+                    }
+                }
+            ],
+            "defaultClientScopes": ["basic", "profile", "email", "roles", "web-origins"]
+        }
+    ]
+}

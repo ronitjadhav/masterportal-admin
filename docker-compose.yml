@@ -1,0 +1,46 @@
+# Dev identity provider. `docker compose up -d` gives a fully configured
+# Keycloak every time — the realm (clients, roles, demo users) is imported
+# from keycloak/realm-masterportal.json, nothing to click through.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin   # dev only
+      # Keycloak lives behind the same https origin as the portal (dev: the
+      # vite proxy at https://localhost:9001/auth, prod: nginx). A browser
+      # must never call it on plain http://:8080 — mixed content is blocked.
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: https://localhost:9001/auth
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-masterportal.json:/opt/keycloak/data/import/realm-masterportal.json:ro
+
+  # Bundled Postgres for a production-shaped stack. SQLite remains the
+  # zero-setup default; point the backend here with:
+  #   DATABASE_URL=postgresql+psycopg://mpadmin:mpadmin@localhost:5432/masterportal_admin
+  # ALREADY HAVE A POSTGRES (managed/RDS/existing cluster)? Don't run this
+  # service — just set DATABASE_URL to your instance and run `alembic upgrade
+  # head` (or start the app, which does it). See README "Database".
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: mpadmin
+      POSTGRES_PASSWORD: mpadmin        # dev only — use a secret in production
+      POSTGRES_DB: masterportal_admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - mp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mpadmin -d masterportal_admin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mp_pgdata:

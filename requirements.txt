@@ -1,0 +1,8 @@
+cryptography==49.0.0
+fastapi==0.139.2
+httpx==0.28.1
+PyJWT==2.13.0
+SQLAlchemy==2.0.51
+alembic==1.16.5
+psycopg[binary]==3.2.3
+uvicorn[standard]==0.51.0

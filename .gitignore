@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database (schema is created by Alembic migrations, data is not source)
+admin.db
+*.db
+*.sqlite3
+
+# Env / secrets
+.env
+*.env
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

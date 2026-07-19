@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>masterportal-admin</title>
+<style>
+/* ============================ design tokens ============================ */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --border: #e7e9ee;
+  --border-strong: #d9dce2;
+  --text: #101828;
+  --text-muted: #667085;
+  --text-faint: #98a2b3;
+  --accent: #15a34a;
+  --accent-soft: #e9fbef;
+  --accent-border: #b6ebc6;
+  --primary: #101828;
+  --primary-hover: #1f2a3c;
+  --danger: #d92d20;
+  --danger-soft: #fef3f2;
+  --warn: #b54708;
+  --warn-soft: #fffaeb;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-xs: 6px;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.05);
+  --shadow-md: 0 6px 20px rgba(16,24,40,.10);
+  --sidebar-w: 250px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ============================ layout ============================ */
+#app { display: flex; min-height: 100vh; }
+.sidebar {
+  width: var(--sidebar-w); flex: 0 0 var(--sidebar-w); background: var(--surface);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+}
+.brand { display: flex; align-items: center; gap: .6rem; padding: 1.1rem 1.25rem; }
+.brand .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--primary); color: #fff;
+  display: grid; place-items: center; flex: 0 0 34px; }
+.brand .name { font-weight: 650; font-size: 14px; line-height: 1.15; }
+.brand .name small { display: block; color: var(--text-faint); font-weight: 500; font-size: 11.5px; }
+.nav { flex: 1; overflow-y: auto; padding: .4rem .75rem; }
+.nav-group { margin-top: 1rem; }
+.nav-group > .label { padding: .3rem .6rem; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  color: var(--text-faint); text-transform: uppercase; }
+.nav-item { display: flex; align-items: center; gap: .65rem; padding: .5rem .6rem; border-radius: var(--radius-sm);
+  color: var(--text-muted); font-weight: 500; cursor: pointer; margin: 1px 0; border: 1px solid transparent; }
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item .icon { color: var(--text-faint); display: inline-flex; }
+.nav-item.active { background: var(--surface); color: var(--text); font-weight: 600;
+  border-color: var(--border); box-shadow: var(--shadow-sm); }
+.nav-item.active .icon { color: var(--accent); }
+.nav-item .count { margin-left: auto; background: var(--bg); color: var(--text-muted);
+  font-size: 11px; font-weight: 600; border-radius: 999px; padding: .05rem .45rem; }
+.sidebar-foot { border-top: 1px solid var(--border); padding: .8rem 1rem; display: flex; align-items: center; gap: .6rem; }
+.sidebar-foot .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft);
+  color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.sidebar-foot .who { font-size: 12.5px; font-weight: 600; }
+.sidebar-foot .who small { display: block; color: var(--text-faint); font-weight: 500; }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: 1rem; padding: 1.1rem 1.9rem .4rem; }
+.topbar .titles h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.topbar .titles p { margin: .15rem 0 0; color: var(--text-muted); font-size: 13px; }
+.topbar .spacer { flex: 1; }
+.content { padding: 1.1rem 1.9rem 2.5rem; }
+
+/* ============================ components ============================ */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); margin-bottom: 1.1rem; }
+.card > .card-head { display: flex; align-items: center; gap: .6rem; padding: .95rem 1.15rem; border-bottom: 1px solid var(--border); }
+.card > .card-head h2 { margin: 0; font-size: 15px; font-weight: 620; }
+.card > .card-head .sub { color: var(--text-muted); font-size: 12.5px; }
+.card > .card-head .actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.card > .card-body { padding: 1.15rem; }
+.card > .card-body.flush { padding: 0; }
+
+.btn { display: inline-flex; align-items: center; gap: .4rem; font: inherit; font-weight: 550; font-size: 13px;
+  padding: .5rem .85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.accent:hover { filter: brightness(.95); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--text-muted); padding: .35rem .5rem; }
+.btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn.danger { color: var(--danger); border-color: var(--border-strong); }
+.btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+.btn.sm { padding: .3rem .55rem; font-size: 12px; }
+.btn.icon { padding: .35rem; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.badge { display: inline-flex; align-items: center; gap: .3rem; font-size: 11.5px; font-weight: 600;
+  padding: .12rem .5rem; border-radius: 999px; border: 1px solid transparent; }
+.badge.green { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border); }
+.badge.amber { background: var(--warn-soft); color: var(--warn); border-color: #fedf89; }
+.badge.gray { background: var(--bg); color: var(--text-muted); border-color: var(--border); }
+.badge.violet { background: #f4f0ff; color: #6941c6; border-color: #e0d5ff; }
+
+table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.tbl th { text-align: left; padding: .6rem 1.15rem; color: var(--text-faint); font-size: 11px;
+  font-weight: 600; letter-spacing: .04em; text-transform: uppercase; background: var(--surface-2);
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+table.tbl td { padding: .6rem 1.15rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.tbl tr:last-child td { border-bottom: 0; }
+table.tbl tbody tr:hover { background: var(--surface-2); }
+.tbl-scroll { max-height: 65vh; overflow: auto; border-radius: 0 0 var(--radius) var(--radius); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-muted); }
+
+.field { display: flex; flex-direction: column; gap: .3rem; }
+.field > label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+input, select, textarea { font: inherit; font-size: 13px; padding: .5rem .65rem; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); background: var(--surface); color: var(--text); width: 100%; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.inline-form { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.inline-form .field { flex: 1; min-width: 130px; }
+
+.empty { text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); }
+.empty .icon { color: var(--text-faint); margin-bottom: .5rem; display: inline-flex; }
+.empty h3 { margin: .2rem 0; font-size: 15px; color: var(--text); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+@media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { position: fixed; z-index: 20; transform: translateX(-100%); transition: transform .2s; } }
+
+.icon svg { display: block; }
+.hint { color: var(--text-muted); font-size: 12.5px; }
+.banner { display: flex; align-items: center; gap: .55rem; padding: .7rem 1rem; border-radius: var(--radius-sm);
+  font-size: 13px; margin-bottom: 1rem; border: 1px solid; }
+.banner.info { background: var(--surface); border-color: var(--border); color: var(--text-muted); }
+.banner.warn { background: var(--warn-soft); border-color: #fedf89; color: var(--warn); }
+.banner.ok { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+/* toasts */
+#toasts { position: fixed; bottom: 1.2rem; right: 1.2rem; display: flex; flex-direction: column; gap: .5rem; z-index: 50; }
+.toast { background: var(--primary); color: #fff; padding: .65rem .9rem; border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md); font-size: 13px; max-width: 360px; animation: rise .18s ease; }
+.toast.error { background: var(--danger); }
+.toast.success { background: var(--accent); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* drawer (layer picker) */
+.drawer-mask { position: fixed; inset: 0; background: rgba(16,24,40,.35); z-index: 40; }
+.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 380px; background: var(--surface);
+  box-shadow: var(--shadow-md); z-index: 41; display: flex; flex-direction: column; }
+.drawer .dhead { display: flex; align-items: center; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
+.drawer .dhead h2 { margin: 0; font-size: 15px; font-weight: 620; flex: 1; }
+.drawer .dbody { padding: 1.15rem; overflow-y: auto; }
+.hit { padding: .55rem .6rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid transparent; }
+.hit:hover { background: var(--accent-soft); border-color: var(--accent-border); }
+.hit .lid { color: var(--text-faint); font-size: 12px; }
+
+/* tree */
+.tree-group { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 1rem; }
+.tree-group > .chdr { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--border); font-weight: 620; font-size: 14px; }
+.tree-group > .chdr .actions { margin-left: auto; display: flex; gap: .4rem; }
+ul.tree { list-style: none; margin: .3rem 0 .3rem 1.15rem; padding: 0; }
+ul.tree.root { margin: .5rem; }
+li.node > .rowline { display: flex; gap: .4rem; align-items: center; padding: .32rem .45rem; border-radius: var(--radius-xs); }
+li.node > .rowline:hover { background: var(--surface-2); }
+.grip { cursor: grab; color: var(--text-faint); font-size: 14px; }
+.drop-into { outline: 2px dashed var(--accent); outline-offset: 2px; background: var(--accent-soft); }
+.fname { max-width: 220px; padding: .2rem .4rem; }
+.lyr .lid { color: var(--text-faint); font-size: 12px; }
+.row-actions { margin-left: auto; display: flex; gap: .25rem; opacity: .55; }
+li.node > .rowline:hover .row-actions { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts"></div>
+<script>
+"use strict";
+
+/* ============================ tiny helpers ============================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const attr = s => esc(s).replace(/"/g, "&quot;");
+
+async function api(path, options = {}) {
+  const r = await fetch(path, {credentials: "same-origin", ...options,
+    headers: {"Content-Type": "application/json", ...(options.headers || {})}});
+  if (r.status === 401) { location.href = "/admin/login"; throw new Error("__login__"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.status === 204 ? null : r.json();
+}
+function toast(msg, tone = "info") {
+  if (msg === "__login__") return;
+  const el = document.createElement("div");
+  el.className = "toast " + tone; el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), tone === "error" ? 5000 : 2600);
+}
+const fail = e => toast(e.message || String(e), "error");
+
+/* ============================ icons (inline, CSP-safe) ============================ */
+const P = {
+  layers: 'M12 2 2 7l10 5 10-5-10-5Z M2 17l10 5 10-5 M2 12l10 5 10-5',
+  tree: 'M6 3v12 M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z M18 6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M18 6v3a3 3 0 0 1-3 3H6',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z M9 12l2 2 4-4',
+  publish: 'M12 15V3 M7 8l5-5 5 5 M5 21h14',
+  import: 'M12 3v12 M17 10l-5 5-5-5 M5 21h14',
+  audit: 'M12 8v4l3 2 M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+  logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z M21 21l-4-4',
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
+  plus: 'M12 5v14 M5 12h14',
+  x: 'M18 6 6 18 M6 6l12 12',
+  up: 'M12 19V5 M5 12l7-7 7 7',
+  down: 'M12 5v14 M19 12l-7 7-7-7',
+  grip: 'M9 5h.01 M9 12h.01 M9 19h.01 M15 5h.01 M15 12h.01 M15 19h.01',
+  map: 'M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z M9 3v15 M15 6v15',
+  check: 'M20 6 9 17l-5-5',
+  sliders: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
+  grid: 'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
+  trash: 'M3 6h18 M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6',
+  code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
+};
+function icon(name, size = 18) {
+  return `<span class="icon"><svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${
+    (P[name] || "").split(" M").map((d, i) => `<path d="${i ? "M" + d : d}"/>`).join("")}</svg></span>`;
+}
+
+/* ============================ UI component library ============================ */
+const UI = {
+  card: ({title, sub, actions, body, flush}) =>
+    `<section class="card">${title ? `<div class="card-head"><div>
+        <h2>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>
+        ${actions ? `<div class="actions">${actions}</div>` : ""}</div>` : ""}
+      <div class="card-body${flush ? " flush" : ""}">${body}</div></section>`,
+  btn: ({label, variant = "", onclick = "", icon: ic, size = "", disabled}) =>
+    `<button class="btn ${variant} ${size}" ${disabled ? "disabled" : ""} ${onclick ? `onclick="${attr(onclick)}"` : ""}>${
+      ic ? icon(ic, 15) : ""}${label ? `<span>${esc(label)}</span>` : ""}</button>`,
+  badge: (text, tone = "gray") => `<span class="badge ${tone}">${esc(text)}</span>`,
+  table: ({cols, rows, empty}) => rows.length
+    ? `<div class="tbl-scroll"><table class="tbl"><thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
+    : UI.empty(empty || {title: "Nothing here yet"}),
+  field: ({label, control, hint}) =>
+    `<div class="field"><label>${esc(label)}</label>${control}${hint ? `<span class="hint">${esc(hint)}</span>` : ""}</div>`,
+  empty: ({icon: ic = "layers", title, hint}) =>
+    `<div class="empty">${icon(ic, 30)}<h3>${esc(title)}</h3>${hint ? `<div class="hint">${esc(hint)}</div>` : ""}</div>`,
+  banner: (text, tone = "info", ic = "audit") => `<div class="banner ${tone}">${icon(ic, 16)}<span>${text}</span></div>`,
+};
+
+/* ============================ app state + nav model ============================ */
+const state = { portals: [], portal: null, whoami: "admin" };
+const catalogOf = slug => (state.portals.find(p => p.slug === slug) || {}).catalog;
+
+const NAV = [
+  {group: "Portal", items: [
+    {route: "settings", label: "Settings", icon: "sliders"},
+    {route: "tree", label: "Layer tree", icon: "tree"},
+    {route: "modules", label: "Modules", icon: "grid"},
+    {route: "advanced", label: "Advanced config", icon: "code"},
+    {route: "publish", label: "Publish", icon: "publish"},
+  ]},
+  {group: "Catalog", items: [
+    {route: "services", label: "Services", icon: "layers"},
+    {route: "import", label: "Import WMS", icon: "import"},
+  ]},
+  {group: "System", items: [
+    {route: "grants", label: "Access & roles", icon: "shield"},
+    {route: "audit", label: "Audit log", icon: "audit"},
+  ]},
+];
+const PAGES = {
+  settings: {title: "Portal settings", sub: "Branding, map view and controls for this portal"},
+  tree: {title: "Layer tree", sub: "Arrange folders and layers for the portal"},
+  modules: {title: "Modules", sub: "Enable the tools and plugins available in this portal"},
+  advanced: {title: "Advanced config", sub: "Edit the raw portalConfig for fields not yet in the forms"},
+  publish: {title: "Publish", sub: "Stage the draft, publish a version, roll back"},
+  services: {title: "Services", sub: "Layers in the selected portal's catalog"},
+  import: {title: "Import WMS", sub: "Add layers from a WMS GetCapabilities document"},
+  grants: {title: "Access & roles", sub: "Who may use secured layers, modules and portals"},
+  audit: {title: "Audit log", sub: "Every administrative change, most recent first"},
+};
+
+/* ============================ shell ============================ */
+function renderShell(route) {
+  const nav = NAV.map(g => `<div class="nav-group"><div class="label">${g.group}</div>${
+    g.items.map(it => `<a class="nav-item ${it.route === route ? "active" : ""}" href="#${it.route}">
+      ${icon(it.icon)}<span>${it.label}</span></a>`).join("")}</div>`).join("");
+  const portalSel = `<select onchange="App.setPortal(this.value)" style="width:auto;min-width:170px">${
+    state.portals.map(p => `<option value="${attr(p.slug)}" ${p.slug === state.portal ? "selected" : ""}>${
+      esc(p.title || p.slug)} (${esc(p.slug)})</option>`).join("")}</select>`;
+  const pg = PAGES[route];
+  $("#app").innerHTML = `
+    <aside class="sidebar">
+      <div class="brand"><span class="logo">${icon("map", 19)}</span>
+        <span class="name">Masterportal<small>admin console</small></span></div>
+      <nav class="nav">${nav}</nav>
+      <div class="sidebar-foot"><span class="avatar">${esc(state.whoami.slice(0,2).toUpperCase())}</span>
+        <span class="who">${esc(state.whoami)}<small>administrator</small></span>
+        <button class="btn ghost icon" style="margin-left:auto" title="Log out"
+          onclick="App.logout()">${icon("logout", 17)}</button></div>
+    </aside>
+    <div class="main">
+      <div class="topbar"><div class="titles"><h1>${esc(pg.title)}</h1><p>${esc(pg.sub)}</p></div>
+        <div class="spacer"></div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:.5rem">
+          <label style="white-space:nowrap">Portal</label>${portalSel}
+          ${UI.btn({label: "New", icon: "plus", onclick: "App.newPortal()"})}</div>
+      </div>
+      <div class="content" id="view"></div>
+    </div>
+    <div id="modal-root"></div>`;
+}
+
+/* ============================ views ============================ */
+const V = {};
+
+V.services = async () => {
+  const cat = catalogOf(state.portal);
+  const q = window.__svcQ || "";
+  const search = `<div style="display:flex;gap:.5rem;flex:1;max-width:420px">
+      <div style="position:relative;flex:1">
+        <span style="position:absolute;left:.6rem;top:.55rem;color:var(--text-faint)">${icon("search",16)}</span>
+        <input id="svcq" value="${attr(q)}" placeholder="Search id or name…" style="padding-left:2rem"
+          onkeydown="if(event.key==='Enter')App.searchServices()"></div>
+      ${UI.btn({label: "Search", onclick: "App.searchServices()"})}</div>`;
+  $("#view").innerHTML = UI.card({title: `Catalog: ${cat}`, actions: search, flush: true,
+    body: `<div id="svc-body">${UI.empty({title: "Loading…"})}</div>`});
+  try {
+    const data = await api(`/api/admin/services?catalog=${encodeURIComponent(cat)}&q=${encodeURIComponent(q)}&limit=150`);
+    const rows = data.items.map(s => [
+      `<span class="mono">${esc(s.id)}</span>`, esc(s.name || "—"), UI.badge(s.typ || "?", "gray"),
+      s.is_public ? UI.badge("public", "green") : UI.badge("login required", "amber"),
+      s.allow_transactions ? UI.badge("WFS-T on", "violet") : `<span class="hint">off</span>`,
+      s.upstream_auth_env ? `<span class="mono">${esc(s.upstream_auth_env)}</span>` : "",
+      `<div style="display:flex;gap:.35rem;justify-content:flex-end">
+        ${UI.btn({label: s.is_public ? "Require login" : "Make public", size: "sm",
+                  onclick: `App.patchSvc('${attr(s.key)}',{is_public:${!s.is_public}})`})}
+        ${UI.btn({label: s.allow_transactions ? "WFS-T off" : "WFS-T on", size: "sm",
+                  onclick: `App.patchSvc('${attr(s.key)}',{allow_transactions:${!s.allow_transactions}})`})}</div>`,
+    ]);
+    $("#svc-body").innerHTML = `<div style="padding:.55rem 1.15rem;color:var(--text-muted);font-size:12.5px">
+        ${data.items.length} of ${data.total} services</div>` +
+      UI.table({cols: ["ID", "Name", "Type", "Access", "Transactions", "Secret env", ""], rows,
+        empty: {icon: "layers", title: "No services match", hint: "Try a different search or import a WMS."}});
+  } catch (e) { fail(e); }
+};
+
+V.grants = async () => {
+  const forms = `<div class="grid-2">
+    ${UI.card({title: "Grant a service to a role", body: `<div class="inline-form">
+      ${UI.field({label: "Service key", control: `<input id="g-svc-key" placeholder="${attr(state.portal)}:19173">`})}
+      ${UI.field({label: "Role", control: `<input id="g-svc-role" placeholder="user">`})}
+      ${UI.btn({label: "Add", variant: "accent", icon: "plus",
+        onclick: "App.addGrant('service',{key:val('g-svc-key'),role:val('g-svc-role')})"})}</div>
+      <p class="hint" style="margin:.6rem 0 0">A secured service with no grants is admin-only.</p>`})}
+    ${UI.card({title: "Restrict a menu module", body: `<div class="inline-form">
+      ${UI.field({label: "Portal", control: `<input id="g-mod-portal" value="${attr(state.portal)}">`})}
+      ${UI.field({label: "Module", control: `<input id="g-mod-type" placeholder="draw">`})}
+      ${UI.field({label: "Role", control: `<input id="g-mod-role" placeholder="admin">`})}
+      ${UI.btn({label: "Add", variant: "accent", icon: "plus",
+        onclick: "App.addGrant('module',{portal:val('g-mod-portal'),module:val('g-mod-type'),role:val('g-mod-role')})"})}</div>`})}
+  </div>`;
+  $("#view").innerHTML = forms + UI.card({title: "Current grants", flush: true,
+    body: `<div id="grants-body">${UI.empty({title: "Loading…"})}</div>`});
+  try {
+    const g = await api("/api/admin/grants");
+    const rows = [
+      ...g.services.map(x => [UI.badge("service", "gray"), `<span class="mono">${esc(x.key)}</span>`, esc(x.role),
+        App._rm("service", {key: x.key, role: x.role})]),
+      ...g.modules.map(x => [UI.badge("module", "violet"), `${esc(x.portal)} / ${esc(x.module)}`, esc(x.role),
+        App._rm("module", {portal: x.portal, module: x.module, role: x.role})]),
+      ...g.portals.map(x => [UI.badge("portal", "amber"), esc(x.portal), esc(x.role),
+        App._rm("portal", {portal: x.portal, role: x.role})]),
+    ];
+    $("#grants-body").innerHTML = UI.table({cols: ["Kind", "Target", "Role", ""], rows,
+      empty: {icon: "shield", title: "No grants yet", hint: "Everything secured is admin-only until granted."}});
+  } catch (e) { fail(e); }
+};
+
+V.publish = async () => {
+  $("#view").innerHTML = `<div id="pub-banner"></div>` + UI.card({
+    title: `Snapshots · ${state.portal}`,
+    actions: UI.btn({label: "Publish current draft", variant: "primary", icon: "publish", onclick: "App.publish()"}),
+    flush: true, body: `<div id="pub-body">${UI.empty({title: "Loading…"})}</div>`});
+  try {
+    const s = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/snapshots`);
+    $("#pub-banner").innerHTML = s.active_version === null
+      ? UI.banner("Serving the <b>live draft</b> (unpublished) — every edit is live immediately.", "warn", "publish")
+      : s.draft_dirty
+        ? UI.banner(`Serving <b>v${s.active_version}</b>, but the draft has <b>unpublished changes</b>.`, "warn", "publish")
+        : UI.banner(`Serving <b>v${s.active_version}</b> — up to date.`, "ok", "check");
+    const rows = s.snapshots.map(sn => [
+      `<b>v${sn.version}</b>`, esc(sn.created_ts.slice(0, 19).replace("T", " ")), esc(sn.created_by),
+      sn.active ? UI.badge("active", "green") : "",
+      sn.active ? "" : UI.btn({label: "Roll back to this", size: "sm", onclick: `App.activate(${sn.version})`})]);
+    rows.push([`<span class="hint">live draft</span>`, "—", "—",
+      s.active_version === null ? UI.badge("active", "green") : "",
+      s.active_version === null ? "" : UI.btn({label: "Serve live draft", size: "sm", onclick: "App.activate(null)"})]);
+    $("#pub-body").innerHTML = UI.table({cols: ["Version", "Published", "By", "", ""], rows});
+  } catch (e) { fail(e); }
+};
+
+V.import = async () => {
+  $("#view").innerHTML = UI.card({title: "Import from a WMS", body: `<div class="inline-form">
+      ${UI.field({label: "Capabilities URL", control: `<input id="imp-url" placeholder="https://example.com/wms">`})}
+      ${UI.field({label: "Catalog", control: `<input id="imp-cat" value="${attr(catalogOf(state.portal))}">`})}
+      ${UI.field({label: "ID prefix", control: `<input id="imp-prefix" value="imp">`})}
+      ${UI.btn({label: "Preview", onclick: "App.importCaps(true)"})}
+      ${UI.btn({label: "Import", variant: "accent", icon: "import", onclick: "App.importCaps(false)"})}</div>
+      <p class="hint" style="margin:.6rem 0 0">Preview parses the document without saving. Import adds layers to the catalog as a draft change — publish to go live.</p>`})
+    + `<div id="imp-out"></div>`;
+};
+
+V.audit = async () => {
+  $("#view").innerHTML = UI.card({title: "Recent activity", flush: true,
+    body: `<div id="audit-body">${UI.empty({title: "Loading…"})}</div>`});
+  try {
+    const rows = (await api("/api/admin/audit?limit=200")).map(r => [
+      `<span class="mono">${esc(r.ts.slice(0, 19).replace("T", " "))}</span>`, esc(r.actor),
+      UI.badge(r.action, "gray"), `<span class="mono">${esc(r.target)}</span>`,
+      `<span class="hint">${esc(JSON.stringify(r.detail))}</span>`]);
+    $("#audit-body").innerHTML = UI.table({cols: ["When (UTC)", "Who", "Action", "Target", "Detail"], rows,
+      empty: {icon: "audit", title: "No activity recorded"}});
+  } catch (e) { fail(e); }
+};
+
+let SETTINGS = null, MODCAT = [];
+
+V.settings = async () => {
+  $("#view").innerHTML = UI.empty({title: "Loading…"});
+  try {
+    const d = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/settings`);
+    SETTINGS = d.settings; MODCAT = d.moduleCatalog;
+    const s = SETTINGS, m = s.map;
+    const branding = UI.card({title: "Branding", body: `
+      ${UI.field({label: "Portal title", control: `<input id="set-title" value="${attr(s.title.text)}">`,
+        hint: "config.json → portalConfig.mainMenu.title.text"})}
+      <div style="margin-top:.8rem"></div>
+      ${UI.field({label: "Description (admin note)", control: `<input id="set-desc" value="${attr(d.description)}">`,
+        hint: "internal — not part of config.json"})}
+      <div class="grid-2" style="margin-top:.8rem">
+        ${UI.field({label: "Logo URL", control: `<input id="set-logo" value="${attr(s.title.logo)}">`})}
+        ${UI.field({label: "Title link", control: `<input id="set-link" value="${attr(s.title.link)}">`})}</div>
+      ${UI.field({label: "Tooltip", control: `<input id="set-tooltip" value="${attr(s.title.toolTip)}">`})}`});
+    const map = UI.card({title: "Map view", body: `
+      <div class="grid-2">
+        ${UI.field({label: "Start map mode", control: `<select id="set-mode">
+          <option value="2D" ${m.startingMapMode === "2D" ? "selected" : ""}>2D</option>
+          <option value="3D" ${m.startingMapMode === "3D" ? "selected" : ""}>3D</option></select>`})}
+        ${UI.field({label: "Projection (EPSG)", control: `<input id="set-epsg" value="${attr(m.epsg)}">`})}
+      </div>
+      <div class="grid-2" style="margin-top:.8rem">
+        ${UI.field({label: "Start center X", control: `<input id="set-cx" type="number" value="${attr((m.startCenter||[])[0] ?? "")}">`})}
+        ${UI.field({label: "Start center Y", control: `<input id="set-cy" type="number" value="${attr((m.startCenter||[])[1] ?? "")}">`})}
+      </div>
+      <div class="grid-2" style="margin-top:.8rem">
+        ${UI.field({label: "Start zoom level", control: `<input id="set-zoom" type="number" value="${attr(m.startZoomLevel ?? "")}">`})}
+        ${UI.field({label: "Background image URL", control: `<input id="set-bg" value="${attr(m.backgroundImage)}">`})}
+      </div>`});
+    const controls = UI.card({title: "Map controls", sub: "Buttons shown on the map",
+      body: `<div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem">${
+        Object.entries(s.controls).map(([c, on]) =>
+          `<label style="display:flex;gap:.4rem;align-items:center;font-size:13px">
+            <input type="checkbox" id="ctl-${c}" ${on ? "checked" : ""} style="width:auto"> ${esc(c)}</label>`).join("")}</div>`});
+    const danger = UI.card({title: "Danger zone", body:
+      `<div style="display:flex;align-items:center;gap:1rem">
+        <span class="hint">Deleting removes this portal's config, snapshots and grants. Services stay in the catalog.</span>
+        <span id="del-slot" style="margin-left:auto">${UI.btn({label: "Delete portal", variant: "danger", icon: "trash", onclick: "App.confirmDelete()"})}</span></div>`});
+    $("#view").innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:.8rem">
+        ${UI.btn({label: "Save settings", variant: "primary", icon: "check", onclick: "App.saveSettings()"})}</div>`
+      + branding + map + controls + danger;
+  } catch (e) { fail(e); }
+};
+
+V.modules = async () => {
+  $("#view").innerHTML = UI.empty({title: "Loading…"});
+  try {
+    const d = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/settings`);
+    SETTINGS = d.settings; MODCAT = d.moduleCatalog;
+    const enabled = new Set(SETTINGS.modules.mainMenu);
+    const rows = MODCAT.map(mod => [
+      esc(mod.label), `<span class="mono">${esc(mod.type)}</span>`,
+      mod.needs_config ? UI.badge("needs config", "amber") : "",
+      enabled.has(mod.type) ? UI.badge("enabled", "green") : `<span class="hint">off</span>`,
+      UI.btn({label: enabled.has(mod.type) ? "Disable" : "Enable", size: "sm",
+        variant: enabled.has(mod.type) ? "" : "accent",
+        onclick: `App.toggleModule('${mod.type}',${!enabled.has(mod.type)})`})]);
+    $("#view").innerHTML = UI.card({title: "Main menu modules",
+      sub: "Tools placed in the portal's main menu", flush: true,
+      body: UI.table({cols: ["Module", "Type", "", "Status", ""], rows})})
+      + UI.banner("Reordering and per-module configuration (print service, contact email, routing…) come in a later tier — for now those use sensible defaults and can be fine-tuned via advanced config.", "info", "grid");
+  } catch (e) { fail(e); }
+};
+
+V.advanced = async () => {
+  $("#view").innerHTML = UI.empty({title: "Loading…"});
+  try {
+    const d = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/portal-config`);
+    const json = JSON.stringify(d.portal_config, null, 2);
+    $("#view").innerHTML =
+      UI.banner("Edits the raw <b>portalConfig</b> of the draft — use this for anything the Settings/Modules/Tree forms don't cover yet (per-module config, search interfaces, tree auto-mode, GFI styling). Saved to the draft; Publish to go live, or roll back if something breaks.", "info", "code")
+      + UI.card({title: "portalConfig (JSON)",
+          actions: UI.btn({label: "Format", size: "sm", onclick: "App.formatConfig()"})
+                 + UI.btn({label: "Save draft", variant: "primary", icon: "check", onclick: "App.savePortalConfig()"}),
+          body: `<div id="adv-err"></div>
+            <textarea id="adv-json" spellcheck="false" style="width:100%;height:58vh;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5;white-space:pre;overflow-wrap:normal">${esc(json)}</textarea>`});
+  } catch (e) { fail(e); }
+};
+
+/* ---- tree view (logic preserved, restyled) ---- */
+let TREE = null, NAMES = {}, TREE_CATALOG = "", UID = 1, DRAG_UID = null, PICK_TARGET = null;
+const val = id => (document.getElementById(id) || {}).value?.trim() || "";
+
+V.tree = async () => {
+  $("#view").innerHTML = UI.card({title: `Editing draft · ${state.portal}`,
+    actions: UI.btn({label: "Save draft", variant: "primary", icon: "check", onclick: "App.saveTree()"}),
+    body: `<div id="tree-warn"></div><div id="tree-baselayer"></div><div id="tree-subjectlayer"></div>
+      <p class="hint" style="margin:.4rem 0 0">Drag a row onto a folder or group to move it; ↑↓ to reorder.
+      Saving writes the <b>draft</b> — publish to go live.</p>`})
+    + `<div id="picker-root"></div>`;
+  try {
+    const t = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/tree`);
+    TREE = t.layer_config; NAMES = t.names || {}; TREE_CATALOG = t.catalog;
+    for (const g of ["baselayer", "subjectlayer"]) if (!TREE[g]) TREE[g] = {elements: []};
+    for (const g of ["baselayer", "subjectlayer"]) assignUids(TREE[g].elements);
+    renderTree();
+  } catch (e) { fail(e); }
+};
+function assignUids(els) { for (const el of els || []) { el._uid = "u" + (UID++); if (el.type === "folder") assignUids(el.elements || (el.elements = [])); } }
+function findNode(uid, els) { for (let i = 0; i < els.length; i++) { if (els[i]._uid === uid) return {node: els[i], parent: els, index: i}; if (els[i].type === "folder") { const h = findNode(uid, els[i].elements); if (h) return h; } } return null; }
+function locate(uid) { for (const g of ["baselayer", "subjectlayer"]) { const h = findNode(uid, TREE[g].elements); if (h) return h; } return null; }
+function containerArray(cuid) { if (cuid.startsWith("g:")) return TREE[cuid.slice(2)].elements; const h = locate(cuid); if (!h || h.node.type !== "folder") return null; return h.node.elements || (h.node.elements = []); }
+function isWithin(cuid, srcUid) { if (cuid.startsWith("g:") || cuid === srcUid) return cuid === srcUid; const s = locate(srcUid); return s && s.node.type === "folder" && !!findNode(cuid, s.node.elements); }
+function moveNode(src, dest) { if (isWithin(dest, src)) return; const d = containerArray(dest); if (!d) return; const h = locate(src); if (!h) return; const [n] = h.parent.splice(h.index, 1); d.push(n); renderTree(); }
+function layerLabel(el) {
+  if (Array.isArray(el.id)) return `${UI.badge("GROUP", "violet")} <span class="lyr">${esc(el.name || el.id.join(", "))}</span>`;
+  const base = String(el.id).split(".")[0];
+  return `<span class="lyr">${esc(el.name || NAMES[base] || "")} <span class="lid">${esc(el.id)}</span></span>`;
+}
+function renderElements(els) {
+  return `<ul class="tree">` + els.map(el => {
+    const ctrls = `<div class="row-actions">
+      ${UI.btn({icon: "up", variant: "ghost", size: "sm", onclick: `App.treeReorder('${el._uid}',-1)`})}
+      ${UI.btn({icon: "down", variant: "ghost", size: "sm", onclick: `App.treeReorder('${el._uid}',1)`})}
+      ${UI.btn({icon: "x", variant: "ghost", size: "sm", onclick: `App.treeRemove('${el._uid}')`})}</div>`;
+    if (el.type === "folder")
+      return `<li class="node" draggable="true" data-uid="${el._uid}" data-container="${el._uid}">
+        <div class="rowline"><span class="grip">${icon("grip",16)}</span>${icon("folder",16)}
+          <input class="fname" value="${attr(el.name)}" oninput="App.treeRename('${el._uid}',this.value)">
+          ${UI.btn({label: "folder", icon: "plus", variant: "ghost", size: "sm", onclick: `App.treeAddFolder('${el._uid}')`})}
+          ${UI.btn({label: "layer", icon: "plus", variant: "ghost", size: "sm", onclick: `App.openPicker('${el._uid}')`})}
+          ${ctrls}</div>${renderElements(el.elements || [])}</li>`;
+    return `<li class="node" draggable="true" data-uid="${el._uid}">
+      <div class="rowline"><span class="grip">${icon("grip",16)}</span>${layerLabel(el)}${ctrls}</div></li>`;
+  }).join("") + `</ul>`;
+}
+function renderGroup(g) {
+  return `<div class="tree-group" data-container="g:${g}"><div class="chdr">${icon("layers",16)} ${g}
+    <div class="actions">
+      ${UI.btn({label: "Folder", icon: "plus", size: "sm", onclick: `App.treeAddFolder('g:${g}')`})}
+      ${UI.btn({label: "Layer", icon: "plus", size: "sm", variant: "accent", onclick: `App.openPicker('g:${g}')`})}</div>
+    </div>${renderElements(TREE[g].elements)}</div>`;
+}
+function renderTree() {
+  $("#tree-baselayer").innerHTML = renderGroup("baselayer");
+  $("#tree-subjectlayer").innerHTML = renderGroup("subjectlayer");
+  document.querySelectorAll("#view [draggable=true]").forEach(li => {
+    li.ondragstart = e => { DRAG_UID = li.dataset.uid; e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; };
+  });
+  document.querySelectorAll("#view [data-container]").forEach(box => {
+    box.ondragover = e => { e.preventDefault(); e.stopPropagation(); box.classList.add("drop-into"); };
+    box.ondragleave = () => box.classList.remove("drop-into");
+    box.ondrop = e => { e.preventDefault(); e.stopPropagation(); box.classList.remove("drop-into");
+      if (DRAG_UID) moveNode(DRAG_UID, box.dataset.container); DRAG_UID = null; };
+  });
+}
+function stripUids(n) { if (Array.isArray(n)) return n.map(stripUids);
+  if (n && typeof n === "object") return Object.fromEntries(Object.entries(n).filter(([k]) => k !== "_uid").map(([k, v]) => [k, stripUids(v)])); return n; }
+
+/* ============================ action handlers ============================ */
+const App = {
+  setPortal(slug) { state.portal = slug; navigate(); },
+  logout() { const f = document.createElement("form"); f.method = "post"; f.action = "/admin/logout"; document.body.appendChild(f); f.submit(); },
+
+  // ---- portal lifecycle ----
+  newPortal() {
+    const catalogs = [...new Set(state.portals.map(p => p.catalog))];
+    $("#modal-root").innerHTML = `<div class="drawer-mask" onclick="App.closeModal()"></div>
+      <div class="drawer"><div class="dhead"><h2>New portal</h2>
+        ${UI.btn({icon: "x", variant: "ghost", onclick: "App.closeModal()"})}</div>
+        <div class="dbody">
+          ${UI.field({label: "Slug (URL id, fixed)", control: `<input id="np-slug" placeholder="my-portal">`,
+            hint: "lowercase, digits, - or _"})}
+          <div style="height:.7rem"></div>
+          ${UI.field({label: "Title", control: `<input id="np-title" placeholder="My Geoportal">`})}
+          <div style="height:.7rem"></div>
+          ${UI.field({label: "Description (optional)", control: `<input id="np-desc" placeholder="short note">`})}
+          <div style="height:.7rem"></div>
+          ${UI.field({label: "Catalog (shared service pool)", control: `<select id="np-catalog">
+            ${catalogs.map(c => `<option>${esc(c)}</option>`).join("")}</select>`,
+            hint: "which services this portal can use"})}
+          <div style="height:1rem"></div>
+          ${UI.btn({label: "Create portal", variant: "primary", icon: "plus", onclick: "App.createPortal()"})}
+        </div></div>`;
+    setTimeout(() => document.getElementById("np-slug")?.focus(), 30);
+  },
+  closeModal() { const r = $("#modal-root"); if (r) r.innerHTML = ""; },
+  async createPortal() {
+    try {
+      const r = await api("/api/admin/portals", {method: "POST", body: JSON.stringify(
+        {slug: val("np-slug"), title: val("np-title"), description: val("np-desc"), catalog: val("np-catalog")})});
+      this.closeModal(); toast(`Portal “${r.slug}” created`, "success");
+      state.portals = await api("/api/admin/portals");
+      state.portal = r.slug; location.hash = "settings"; navigate();
+    } catch (e) { fail(e); }
+  },
+  confirmDelete() {
+    $("#del-slot").innerHTML = `<span class="hint">Delete “${esc(state.portal)}”?</span>
+      ${UI.btn({label: "Yes, delete", variant: "danger", size: "sm", onclick: "App.deletePortal()"})}
+      ${UI.btn({label: "Cancel", size: "sm", onclick: "V.settings()"})}`;
+  },
+  async deletePortal() {
+    try {
+      await api(`/api/admin/portals/${encodeURIComponent(state.portal)}`, {method: "DELETE"});
+      toast("Portal deleted", "success");
+      state.portals = await api("/api/admin/portals");
+      state.portal = state.portals[0].slug; location.hash = "settings"; navigate();
+    } catch (e) { fail(e); V.settings(); }
+  },
+
+  async saveSettings() {
+    const cx = parseFloat(val("set-cx")), cy = parseFloat(val("set-cy")), z = val("set-zoom");
+    const payload = {
+      description: val("set-desc"),
+      title: {text: val("set-title"), logo: val("set-logo"), link: val("set-link"), toolTip: val("set-tooltip")},
+      map: {startingMapMode: val("set-mode"), epsg: val("set-epsg"), backgroundImage: val("set-bg"),
+            startZoomLevel: z === "" ? null : Number(z),
+            startCenter: (isNaN(cx) || isNaN(cy)) ? [] : [cx, cy]},
+      controls: Object.fromEntries(SETTINGS ? Object.keys(SETTINGS.controls).map(
+        c => [c, document.getElementById("ctl-" + c)?.checked || false]) : []),
+    };
+    try { await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/settings`,
+      {method: "PATCH", body: JSON.stringify(payload)});
+      toast("Settings saved to draft", "success"); V.settings(); } catch (e) { fail(e); }
+  },
+  async toggleModule(type, enabled) {
+    try { await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/modules`,
+      {method: "POST", body: JSON.stringify({menu: "mainMenu", type, enabled})});
+      toast(enabled ? "Module enabled" : "Module disabled", "success"); V.modules(); } catch (e) { fail(e); }
+  },
+  _parseAdv() {
+    try { return {ok: JSON.parse($("#adv-json").value)}; }
+    catch (e) { return {err: e.message}; }
+  },
+  formatConfig() {
+    const p = this._parseAdv();
+    if (p.err) { $("#adv-err").innerHTML = UI.banner("Invalid JSON: " + esc(p.err), "warn", "x"); return; }
+    $("#adv-json").value = JSON.stringify(p.ok, null, 2); $("#adv-err").innerHTML = "";
+  },
+  async savePortalConfig() {
+    const p = this._parseAdv();
+    if (p.err) { $("#adv-err").innerHTML = UI.banner("Invalid JSON: " + esc(p.err), "warn", "x"); return; }
+    try {
+      const r = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/portal-config`,
+        {method: "PUT", body: JSON.stringify({portal_config: p.ok})});
+      $("#adv-err").innerHTML = r.warnings.length
+        ? UI.banner("Saved with warnings: " + r.warnings.map(esc).join("; "), "warn") : "";
+      toast(r.warnings.length ? `Saved (${r.warnings.length} warnings)` : "Config saved to draft", "success");
+    } catch (e) { $("#adv-err").innerHTML = UI.banner(esc(e.message), "warn", "x"); }
+  },
+
+  async patchSvc(key, body) {
+    try { await api(`/api/admin/services/${encodeURIComponent(key)}`, {method: "PATCH", body: JSON.stringify(body)});
+      toast("Service updated", "success"); V.services(); } catch (e) { fail(e); }
+  },
+  searchServices() { window.__svcQ = val("svcq"); V.services(); },
+
+  _rm: (kind, payload) => UI.btn({label: "Remove", variant: "danger", size: "sm",
+    onclick: `App.removeGrant('${kind}',${attr(JSON.stringify(payload))})`}),
+  async addGrant(kind, payload) {
+    try { await api(`/api/admin/grants/${kind}`, {method: "POST", body: JSON.stringify(payload)});
+      toast("Grant added", "success"); V.grants(); } catch (e) { fail(e); }
+  },
+  async removeGrant(kind, payload) {
+    try { await api(`/api/admin/grants/${kind}/delete`, {method: "POST", body: JSON.stringify(payload)});
+      toast("Grant removed", "success"); V.grants(); } catch (e) { fail(e); }
+  },
+
+  async publish() {
+    try { const r = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/publish`, {method: "POST"});
+      toast(`Published v${r.version}`, "success"); V.publish(); } catch (e) { fail(e); }
+  },
+  async activate(version) {
+    try { await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/activate`,
+      {method: "POST", body: JSON.stringify({version})});
+      toast(version === null ? "Serving live draft" : `Rolled back to v${version}`, "success"); V.publish(); } catch (e) { fail(e); }
+  },
+
+  async importCaps(dry) {
+    $("#imp-out").innerHTML = UI.empty({title: "Fetching capabilities…"});
+    try {
+      const data = await api("/api/admin/import-capabilities", {method: "POST", body: JSON.stringify(
+        {url: val("imp-url"), catalog: val("imp-cat"), id_prefix: val("imp-prefix"), dry_run: dry})});
+      const rows = data.layers.map(l => [`<span class="mono">${esc(l.id)}</span>`, esc(l.name), esc(l.layers)]);
+      $("#imp-out").innerHTML = UI.card({title: dry ? "Preview" : "Imported", sub: `WMS ${data.version} · ${data.layers.length} layers`,
+        flush: true, body: UI.table({cols: ["New ID", "Name", "WMS layer"], rows})});
+      if (!dry) toast(`Imported ${data.layers.length} layers`, "success");
+    } catch (e) { $("#imp-out").innerHTML = ""; fail(e); }
+  },
+
+  // tree
+  treeReorder(uid, dir) { const h = locate(uid), j = h.index + dir; if (j < 0 || j >= h.parent.length) return;
+    [h.parent[h.index], h.parent[j]] = [h.parent[j], h.parent[h.index]]; renderTree(); },
+  treeRemove(uid) { const h = locate(uid); h.parent.splice(h.index, 1); renderTree(); },
+  treeAddFolder(cuid) { containerArray(cuid).push({type: "folder", name: "New folder", elements: [], _uid: "u" + (UID++)}); renderTree(); },
+  treeRename(uid, name) { locate(uid).node.name = name; },
+  async saveTree() {
+    try { const r = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/tree`,
+      {method: "PUT", body: JSON.stringify({layer_config: stripUids(TREE)})});
+      $("#tree-warn").innerHTML = r.warnings.length ? UI.banner(`Saved with ${r.warnings.length} warning(s): ` + r.warnings.map(esc).join("; "), "warn") : "";
+      toast(r.warnings.length ? `Saved (${r.warnings.length} warnings)` : "Draft saved", "success"); } catch (e) { fail(e); }
+  },
+  openPicker(cuid) {
+    PICK_TARGET = cuid;
+    $("#picker-root").innerHTML = `<div class="drawer-mask" onclick="App.closePicker()"></div>
+      <div class="drawer"><div class="dhead"><h2>Add layer</h2>
+        ${UI.btn({icon: "x", variant: "ghost", onclick: "App.closePicker()"})}</div>
+        <div class="dbody"><input id="pick-q" placeholder="Search catalog…" oninput="App.pickSearch()" autofocus>
+          <div id="pick-results" style="margin-top:.6rem"></div></div></div>`;
+    setTimeout(() => document.getElementById("pick-q")?.focus(), 30);
+  },
+  closePicker() { $("#picker-root").innerHTML = ""; PICK_TARGET = null; },
+  async pickSearch() {
+    const q = val("pick-q"); if (!q) { $("#pick-results").innerHTML = ""; return; }
+    try {
+      const data = await api(`/api/admin/services?catalog=${encodeURIComponent(TREE_CATALOG)}&q=${encodeURIComponent(q)}&limit=40`);
+      $("#pick-results").innerHTML = data.items.map(s =>
+        `<div class="hit" onclick='App.addLayer(${JSON.stringify(s.id)},${JSON.stringify(s.name || "")})'>
+          ${esc(s.name || "—")} <span class="lid">${esc(s.id)} · ${esc(s.typ)}</span></div>`).join("")
+        || UI.empty({title: "No matches", icon: "search"});
+    } catch (e) { fail(e); }
+  },
+  addLayer(id, name) {
+    if (!PICK_TARGET) return;
+    if (name) NAMES[String(id).split(".")[0]] = name;
+    containerArray(PICK_TARGET).push({id: String(id), _uid: "u" + (UID++)});
+    App.closePicker(); renderTree(); toast("Layer added to draft", "success");
+  },
+};
+window.App = App; window.val = val;
+
+/* ============================ router ============================ */
+function navigate() {
+  const route = (location.hash.slice(1) || "settings");
+  if (!PAGES[route]) { location.hash = "services"; return; }
+  renderShell(route);
+  (V[route] || (() => {}))();
+}
+window.addEventListener("hashchange", navigate);
+
+async function boot() {
+  try {
+    const [me, portals] = await Promise.all([api("/api/admin/me"), api("/api/admin/portals")]);
+    state.whoami = me.username;
+    state.portals = portals;
+    if (!state.portals.length) { document.body.innerHTML = "<p style='padding:2rem'>No portals imported yet.</p>"; return; }
+    state.portal = state.portals[0].slug;
+    navigate();
+  } catch (e) { fail(e); }
+}
+boot();
+</script>
+</body>
+</html>
