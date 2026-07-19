@@ -68,8 +68,9 @@ python import_portal.py ../masterportal/portal/master master
 # start the API (runs `alembic upgrade head`, then serves)
 uvicorn app.main:app --reload
 
-# end-to-end security checks (25 checks: authz, URL-hiding, live proxy,
-# snapshots, rate limits, migrations, gzip, logging…)
+# end-to-end checks (authz, URL-hiding, live proxy, snapshots, styles, rate
+# limits, migrations, gzip, logging…). Self-seeds its fixtures if missing,
+# so this works green from a clean clone.
 python test_e2e.py
 ```
 

@@ -1,14 +1,43 @@
-"""End-to-end security checks. Needs the backend on :8000 and Keycloak on :8080
-(docker compose up -d), plus internet access to the demo upstreams, and both
-'basic' and 'master' portals imported with master service 19173 secured.
+"""End-to-end checks. Needs the backend on :8000 and Keycloak on :8080
+(docker compose up -d) and internet access to the demo upstreams.
+
+Self-seeding: the fixtures (a small `basic` catalog + the Hamburg `master`
+catalog with a couple of secured/granted layers) are imported automatically if
+missing, so this runs green from a clean clone — no manual setup.
 
 Run: .venv/bin/python test_e2e.py
 """
 import json
+import os
+import subprocess
+import sys
 
 import httpx
 
 from app import settings
+
+MP = os.path.join(os.path.dirname(__file__) or ".", "..", "masterportal", "portal")
+
+
+def _seed(*args):
+    subprocess.run([sys.executable, *args], check=True,
+                   cwd=os.path.dirname(__file__) or ".")
+
+
+def ensure_fixtures():
+    """Provision the portals/catalogs the checks rely on, idempotently."""
+    adm = {"Authorization": f"Bearer {get_token_client('masterportal-admin', 'admin-demo', 'admin-demo')}"}
+    have = {p["slug"] for p in httpx.get(f"{BASE}/api/admin/portals", headers=adm, timeout=120).json()}
+    if "basic" not in have:
+        _seed("import_portal.py", f"{MP}/basic", "basic")
+    if "master" not in have:
+        _seed("import_portal.py", f"{MP}/master", "master")
+    # RBAC demo fixtures on master (idempotent): secure DGM1 admin-only, grant
+    # DOP to role 'user', restrict the draw module to admin.
+    _seed("enable_login.py", "master", "19173")
+    _seed("enable_login.py", "master", "34127")
+    _seed("grant.py", "service", "master", "34127", "user")
+    _seed("grant.py", "module", "master", "draw", "admin")
 
 BASE = "http://localhost:8000"          # direct backend access
 PUB = settings.PUBLIC_BASE_URL          # what clients see inside served configs
@@ -35,7 +64,8 @@ def main():
     token, id_token = grant["access_token"], grant["id_token"]
     auth = {"Authorization": f"Bearer {token}"}
     admin_auth = {"Authorization": f"Bearer {get_token('admin-demo', 'admin-demo')['access_token']}"}
-    print("1. got real Keycloak tokens for 'demo' (role user) and 'admin-demo' (role admin)")
+    ensure_fixtures()
+    print("1. got Keycloak tokens for 'demo' (user) and 'admin-demo' (admin); fixtures ensured")
 
     services = httpx.get(f"{BASE}/api/portals/master/services.json",
                          headers=admin_auth, timeout=120).raise_for_status()
