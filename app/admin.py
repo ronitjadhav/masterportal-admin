@@ -33,7 +33,7 @@ from . import access, configsrc, portalcfg, settings
 from .auth import roles as token_roles
 from .auth import validate_token
 from .db import (AuditLog, ModuleRole, Portal, PortalRole, Service,
-                 ServiceRole, Snapshot, db_session, scoped_key)
+                 ServiceRole, Snapshot, Style, db_session, scoped_key)
 from .proxy import _assert_allowed_upstream
 
 router = APIRouter()
@@ -643,6 +643,107 @@ def put_tree(slug: str, payload: dict = Body(...),
     _audit(db, claims, "tree.save", slug, {"warnings": len(warnings)})
     db.commit()
     return {"ok": True, "warnings": warnings}
+
+
+# ---------------------------------------------------------------- vector styles
+
+def _style_template(style_id: str) -> dict:
+    return {"styleId": style_id, "rules": [{"style": {
+        "type": "circle", "circleRadius": 8,
+        "circleFillColor": [0, 153, 255, 0.8],
+        "circleStrokeColor": [0, 0, 0, 1], "circleStrokeWidth": 1}}]}
+
+
+def _validate_style(attrs: dict, style_id: str) -> dict:
+    if not isinstance(attrs, dict):
+        raise HTTPException(422, "style must be a JSON object")
+    if not isinstance(attrs.get("rules"), list):
+        raise HTTPException(422, "style.rules must be a list")
+    for i, rule in enumerate(attrs["rules"]):
+        if not isinstance(rule, dict) or not isinstance(rule.get("style"), dict):
+            raise HTTPException(422, f"rules[{i}] must be an object with a 'style' object")
+    return {**attrs, "styleId": style_id}   # styleId is the identity — force it
+
+
+def _style_usage(db: Session, catalog: str, style_id: str) -> list[str]:
+    """services in the catalog that reference this styleId."""
+    return [s.external_id for s in db.query(Service).filter(Service.catalog == catalog)
+            if str(s.attrs.get("styleId")) == style_id]
+
+
+def _sid(style: Style) -> str:
+    return style.attrs.get("styleId") or style.key.split(":", 1)[-1]
+
+
+@router.get("/api/admin/styles")
+def list_styles(catalog: str, q: str | None = None,
+                claims: dict = Depends(require_admin), db: Session = Depends(db_session)):
+    usage: dict[str, int] = {}
+    for s in db.query(Service).filter(Service.catalog == catalog):
+        ref = s.attrs.get("styleId")
+        if ref is not None:
+            usage[str(ref)] = usage.get(str(ref), 0) + 1
+    items = []
+    for r in db.query(Style).filter(Style.catalog == catalog).order_by(Style.position).all():
+        sid = _sid(r)
+        if q and q.lower() not in sid.lower():
+            continue
+        rules = r.attrs.get("rules") or []
+        items.append({"key": r.key, "styleId": sid, "rules": len(rules),
+                      "firstStyle": rules[0].get("style", {}) if rules else {},
+                      "usage": usage.get(sid, 0)})
+    return {"total": len(items), "items": items}
+
+
+@router.get("/api/admin/styles/{key}")
+def get_style(key: str, claims: dict = Depends(require_admin), db: Session = Depends(db_session)):
+    style = db.get(Style, key)
+    if style is None:
+        raise HTTPException(404, "unknown style")
+    return {"key": key, "catalog": style.catalog, "styleId": _sid(style),
+            "attrs": style.attrs, "usage": _style_usage(db, style.catalog, _sid(style))}
+
+
+@router.post("/api/admin/styles")
+def create_style(payload: dict = Body(...), claims: dict = Depends(require_admin),
+                 db: Session = Depends(db_session)):
+    catalog = (payload.get("catalog") or "").strip()
+    style_id = (payload.get("styleId") or "").strip()
+    if not catalog or not style_id:
+        raise HTTPException(422, "catalog and styleId are required")
+    key = scoped_key(catalog, style_id)
+    if db.get(Style, key) is not None:
+        raise HTTPException(409, f"style {style_id!r} already exists in {catalog!r}")
+    attrs = _validate_style(payload.get("attrs") or _style_template(style_id), style_id)
+    position = db.query(Style).filter(Style.catalog == catalog).count()
+    db.add(Style(key=key, catalog=catalog, position=position, attrs=attrs))
+    _audit(db, claims, "style.create", key, {"styleId": style_id})
+    db.commit()
+    return {"key": key, "styleId": style_id}
+
+
+@router.put("/api/admin/styles/{key}")
+def put_style(key: str, payload: dict = Body(...), claims: dict = Depends(require_admin),
+              db: Session = Depends(db_session)):
+    style = db.get(Style, key)
+    if style is None:
+        raise HTTPException(404, "unknown style")
+    style.attrs = _validate_style(payload.get("attrs"), _sid(style))
+    _audit(db, claims, "style.update", key, {"rules": len(style.attrs["rules"])})
+    db.commit()
+    return {"ok": True, "usage": _style_usage(db, style.catalog, _sid(style))}
+
+
+@router.delete("/api/admin/styles/{key}")
+def delete_style(key: str, claims: dict = Depends(require_admin), db: Session = Depends(db_session)):
+    style = db.get(Style, key)
+    if style is None:
+        raise HTTPException(404, "unknown style")
+    used_by = _style_usage(db, style.catalog, _sid(style))
+    db.delete(style)
+    _audit(db, claims, "style.delete", key, {"was_used_by": used_by})
+    db.commit()
+    return {"deleted": key, "was_used_by": used_by}
 
 
 # ------------------------------------------------- capabilities import (WMS)

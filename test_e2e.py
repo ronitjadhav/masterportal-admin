@@ -300,6 +300,30 @@ def main():
     httpx.put(f"{BASE}/api/admin/portals/basic/tree", headers=adm, json={"layer_config": orig_tree})
     print("16d. tree save requires admin (non-admin=403); basic tree restored")
 
+    # --- Vector styles CRUD (style.json), on the master catalog
+    httpx.request("DELETE", f"{BASE}/api/admin/styles/master:e2e-style", headers=adm)
+    lst = httpx.get(f"{BASE}/api/admin/styles?catalog=master&q=1711", headers=adm).json()
+    assert any(i["styleId"] == "1711" for i in lst["items"]), "expected style 1711 in master"
+    c = httpx.post(f"{BASE}/api/admin/styles", headers=adm, json={"catalog": "master", "styleId": "e2e-style"})
+    assert c.status_code == 200 and c.json()["styleId"] == "e2e-style"
+    assert httpx.post(f"{BASE}/api/admin/styles", headers=adm,
+                      json={"catalog": "master", "styleId": "e2e-style"}).status_code == 409   # dup
+    # edit to a polygon style; styleId is forced immutable
+    put = httpx.put(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm, json={"attrs": {
+        "styleId": "IGNORED", "rules": [{"style": {"polygonFillColor": [255, 0, 0, 0.5],
+        "polygonStrokeColor": [0, 0, 0, 1], "polygonStrokeWidth": 2}}]}})
+    assert put.status_code == 200
+    got = httpx.get(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm).json()
+    assert got["styleId"] == "e2e-style" and got["attrs"]["rules"][0]["style"]["polygonFillColor"] == [255, 0, 0, 0.5]
+    assert httpx.put(f"{BASE}/api/admin/styles/master:e2e-style", headers=adm,
+                     json={"attrs": {"rules": "nope"}}).status_code == 422                     # bad shape
+    # served style.json (any portal on the master catalog) includes it
+    assert any(s.get("styleId") == "e2e-style" for s in httpx.get(f"{BASE}/api/portals/demo/style.json").json())
+    assert httpx.post(f"{BASE}/api/admin/styles", headers={"Authorization": f"Bearer {admin_user}"},
+                      json={"catalog": "master", "styleId": "x"}).status_code == 403           # non-admin
+    assert httpx.request("DELETE", f"{BASE}/api/admin/styles/master:e2e-style", headers=adm).status_code == 200
+    print("18f. styles CRUD: list/create/edit/get/delete; styleId immutable; bad shape=422; non-admin=403; served")
+
     # --- Portal lifecycle + config editing (create → settings → modules → delete)
     httpx.request("DELETE", f"{BASE}/api/admin/portals/e2e-portal", headers=adm)  # clean prior run
     r = httpx.post(f"{BASE}/api/admin/portals", headers=adm,

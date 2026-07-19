@@ -159,6 +159,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .hit { padding: .55rem .6rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid transparent; }
 .hit:hover { background: var(--accent-soft); border-color: var(--accent-border); }
 .hit .lid { color: var(--text-faint); font-size: 12px; }
+.swatch { width: 40px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 50%/10px 10px; display: inline-flex; }
+.swatch svg, .style-preview svg { display: block; margin: auto; }
+.color-row { display: flex; gap: .4rem; align-items: center; }
+.color-row input[type=color] { width: 46px; height: 34px; padding: 2px; border-radius: var(--radius-sm); }
+.style-preview { width: 100%; max-width: 220px; height: 130px; border-radius: var(--radius); border: 1px solid var(--border); background: repeating-conic-gradient(#f0f0f0 0 25%, #fff 0 50%) 50%/16px 16px; display: grid; place-items: center; }
 
 /* tree */
 .tree-group { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 1rem; }
@@ -225,6 +230,7 @@ const P = {
   grid: 'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
   trash: 'M3 6h18 M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6',
   code: 'M16 18l6-6-6-6 M8 6l-6 6 6 6',
+  brush: 'M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08 M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02Z',
 };
 function icon(name, size = 18) {
   return `<span class="icon"><svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
@@ -268,6 +274,7 @@ const NAV = [
   ]},
   {group: "Catalog", items: [
     {route: "services", label: "Services", icon: "layers"},
+    {route: "styles", label: "Styles", icon: "brush"},
     {route: "import", label: "Import WMS", icon: "import"},
   ]},
   {group: "System", items: [
@@ -282,6 +289,7 @@ const PAGES = {
   advanced: {title: "Advanced config", sub: "Edit the raw portalConfig for fields not yet in the forms"},
   publish: {title: "Publish", sub: "Stage the draft, publish a version, roll back"},
   services: {title: "Services", sub: "Layers in the selected portal's catalog"},
+  styles: {title: "Vector styles", sub: "How WFS/OAF/GeoJSON layers are drawn (style.json)"},
   import: {title: "Import WMS", sub: "Add layers from a WMS GetCapabilities document"},
   grants: {title: "Access & roles", sub: "Who may use secured layers, modules and portals"},
   audit: {title: "Audit log", sub: "Every administrative change, most recent first"},
@@ -514,6 +522,115 @@ V.advanced = async () => {
   } catch (e) { fail(e); }
 };
 
+// ---------------- Vector styles ----------------
+let _styleEdit = null;  // {key, styleId, attrs, usage, mode} when editing, else null
+
+const rgba = a => Array.isArray(a) ? `rgba(${a[0]|0},${a[1]|0},${a[2]|0},${a.length>3?a[3]:1})` : "transparent";
+function rgbaHex(a) { const h = n => ("0" + (n|0).toString(16)).slice(-2); return a ? "#" + h(a[0]) + h(a[1]) + h(a[2]) : "#888888"; }
+function rgbaAlpha(a) { return a && a.length > 3 ? a[3] : 1; }
+function hexAlpha(hex, al) { const n = parseInt(hex.slice(1), 16); return [(n>>16)&255, (n>>8)&255, n&255, Number(al)]; }
+
+function styleKind(st) {
+  if (!st) return "other";
+  if (st.type === "icon" || st.imageName) return "icon";
+  if (st.type === "circle" || "circleRadius" in st || "circleFillColor" in st) return "circle";
+  if (st.type === "text" || "labelField" in st || "text" in st) return "text";
+  if ("lineStrokeColor" in st || st.type === "line") return "line";
+  if ("polygonFillColor" in st || "polygonStrokeColor" in st || "polygonFillHatch" in st) return "polygon";
+  return "other";
+}
+function swatch(st, size = 28) {
+  const k = styleKind(st), s = size, m = size / 2;
+  const fill = rgba(st && (st.circleFillColor || st.polygonFillColor) || [150,150,150,0.6]);
+  const stroke = rgba(st && (st.circleStrokeColor || st.polygonStrokeColor || st.lineStrokeColor) || [40,40,40,1]);
+  const sw = st && (st.circleStrokeWidth || st.polygonStrokeWidth || st.lineStrokeWidth) || 1;
+  let inner = "";
+  if (k === "circle") inner = `<circle cx="${m}" cy="${m}" r="${Math.max(3, m-4)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+  else if (k === "polygon") inner = `<rect x="3" y="3" width="${s-6}" height="${s-6}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+  else if (k === "line") inner = `<line x1="3" y1="${s-4}" x2="${s-3}" y2="4" stroke="${stroke}" stroke-width="${Math.max(2,sw)}" stroke-linecap="round"/>`;
+  else if (k === "icon") inner = `<rect x="4" y="4" width="${s-8}" height="${s-8}" rx="3" fill="#e6eefc" stroke="#93b4f0"/><text x="${m}" y="${m+3}" font-size="9" text-anchor="middle" fill="#3b6fd4">IMG</text>`;
+  else if (k === "text") inner = `<text x="${m}" y="${m+4}" font-size="14" text-anchor="middle" fill="${rgba(st.textFillColor||[40,40,40,1])}">T</text>`;
+  else inner = `<text x="${m}" y="${m+3}" font-size="8" text-anchor="middle" fill="#999">?</text>`;
+  return `<span class="swatch" style="width:${s+12}px;height:${s+2}px"><svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${inner}</svg></span>`;
+}
+
+V.styles = async () => {
+  if (_styleEdit) return renderStyleEditor();
+  const cat = catalogOf(state.portal);
+  const q = window.__styleQ || "";
+  $("#view").innerHTML = UI.card({title: `Styles in catalog: ${cat}`, flush: true,
+    actions: `<div style="display:flex;gap:.5rem">
+        <input id="styq" value="${attr(q)}" placeholder="search styleId…" onkeydown="if(event.key==='Enter')App.searchStyles()">
+        ${UI.btn({label:"Search", onclick:"App.searchStyles()"})}
+        ${UI.btn({label:"New style", variant:"accent", icon:"plus", onclick:"App.newStyle()"})}</div>`,
+    body: `<div id="sty-body">${UI.empty({title:"Loading…"})}</div>`});
+  try {
+    const d = await api(`/api/admin/styles?catalog=${encodeURIComponent(cat)}&q=${encodeURIComponent(q)}`);
+    const rows = d.items.map(s => [
+      swatch(s.firstStyle), `<span class="mono">${esc(s.styleId)}</span>`,
+      UI.badge(styleKind(s.firstStyle), "gray"), `${s.rules} rule(s)`,
+      s.usage ? UI.badge(`${s.usage} layer(s)`, "green") : `<span class="hint">unused</span>`,
+      `<div style="display:flex;gap:.35rem;justify-content:flex-end">
+        ${UI.btn({label:"Edit", size:"sm", onclick:`App.editStyle('${attr(s.key)}')`})}
+        ${UI.btn({label:"Duplicate", size:"sm", onclick:`App.dupStyle('${attr(s.key)}','${attr(s.styleId)}')`})}</div>`]);
+    $("#sty-body").innerHTML = `<div style="padding:.5rem 1.15rem;color:var(--text-muted);font-size:12.5px">${d.items.length} styles</div>`
+      + UI.table({cols:["", "styleId", "Kind", "Rules", "Used by", ""], rows,
+          empty:{icon:"brush", title:"No styles", hint:"Create one with “New style”."}});
+  } catch (e) { fail(e); }
+};
+
+function styleWorking() {   // guarantee a live rules[0].style object to mutate
+  const a = _styleEdit.attrs;
+  if (!Array.isArray(a.rules) || !a.rules.length) a.rules = [{style: {}}];
+  if (!a.rules[0].style || typeof a.rules[0].style !== "object") a.rules[0].style = {};
+  return a.rules[0].style;
+}
+
+function renderStyleEditor() {
+  const e = _styleEdit, st = styleWorking(), kind = styleKind(st);
+  const simple = e.attrs.rules.length === 1 && ["circle","icon","line","polygon"].includes(kind);
+  const usage = e.usage.length ? UI.badge(`${e.usage.length} layer(s): ${e.usage.slice(0,6).join(", ")}`, "green") : UI.badge("unused","gray");
+  const head = `<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+      ${UI.btn({label:"Back", onclick:"App.closeStyle()"})}
+      <h2 style="margin:0;font-size:17px">Style <span class="mono">${esc(e.styleId)}</span></h2> ${usage}
+      <span style="flex:1"></span>
+      ${UI.btn({label:"Save", variant:"primary", icon:"check", onclick:"App.saveStyle()"})}
+      ${UI.btn({label:"Delete", variant:"danger", icon:"trash", onclick:"App.delStyle()"})}</div>`
+    + (e.confirmDel ? `<div class="banner warn">${icon("trash",16)}<span>Delete style
+        <b>${esc(e.styleId)}</b>?${e.usage.length ? ` It is used by ${e.usage.length} layer(s) — they will fall back to default rendering.` : ""}</span>
+        <span style="margin-left:auto;display:flex;gap:.4rem">
+        ${UI.btn({label:"Confirm delete", variant:"danger", size:"sm", onclick:"App.delStyleConfirm()"})}
+        ${UI.btn({label:"Cancel", size:"sm", onclick:"App.delCancel()"})}</span></div>` : "");
+  let bodyCard;
+  if (e.mode === "raw" || !simple) {
+    if (!simple && e.mode !== "raw")
+      $("#view"); // fallthrough to raw with note
+    bodyCard = UI.card({title:"Style JSON", sub: simple ? "" : "This style uses rules/conditions the form doesn't cover — edit as JSON",
+      actions: simple ? UI.btn({label:"Form editor", size:"sm", onclick:"App.styleMode('form')"}) : "",
+      body:`<div id="sty-err"></div><textarea id="sty-json" spellcheck="false" style="width:100%;height:44vh;font-family:ui-monospace,monospace;font-size:12.5px;white-space:pre">${esc(JSON.stringify(e.attrs, null, 2))}</textarea>`});
+    $("#view").innerHTML = head + bodyCard; return;
+  }
+  // structured form for the recognized kind
+  const cf = (label, prop) => `<div class="field"><label>${label}</label><div class="color-row">
+      <input type="color" id="${prop}-c" value="${rgbaHex(st[prop])}" oninput="App.styleColor('${prop}')">
+      <input type="number" id="${prop}-a" value="${rgbaAlpha(st[prop])}" min="0" max="1" step="0.1" title="opacity" oninput="App.styleColor('${prop}')" style="width:74px"></div></div>`;
+  const nf = (label, prop, step) => UI.field({label, control:`<input type="number" id="s-${prop}" value="${attr(st[prop]??'')}" step="${step||1}" oninput="App.styleNum('${prop}')">`});
+  const tf = (label, prop) => UI.field({label, control:`<input id="s-${prop}" value="${attr(st[prop]??'')}" oninput="App.styleText('${prop}')">`});
+  let fields = "";
+  if (kind === "circle") fields = `<div class="grid-2">${cf("Fill","circleFillColor")}${cf("Stroke","circleStrokeColor")}</div>
+      <div class="grid-2" style="margin-top:.7rem">${nf("Radius","circleRadius")}${nf("Stroke width","circleStrokeWidth")}</div>`;
+  else if (kind === "polygon") fields = `<div class="grid-2">${cf("Fill","polygonFillColor")}${cf("Stroke","polygonStrokeColor")}</div>
+      <div style="margin-top:.7rem">${nf("Stroke width","polygonStrokeWidth")}</div>`;
+  else if (kind === "line") fields = `<div class="grid-2">${cf("Line color","lineStrokeColor")}${nf("Line width","lineStrokeWidth")}</div>`;
+  else if (kind === "icon") fields = `<div class="grid-2">${tf("Image name / URL","imageName")}${nf("Scale","imageScale",0.1)}</div>`;
+  $("#view").innerHTML = head + `<div class="grid-2">
+      ${UI.card({title:`${kind} style`, body: fields})}
+      ${UI.card({title:"Preview", body:`<div class="style-preview" id="sty-preview">${swatch(st,90)}</div>
+        <div style="margin-top:.8rem">${UI.btn({label:"Edit as JSON (advanced)", size:"sm", onclick:"App.styleMode('raw')"})}</div>`})}
+    </div>`;
+}
+function refreshPreview() { const p = $("#sty-preview"); if (p) p.innerHTML = swatch(styleWorking(), 90); }
+
 /* ---- tree view (logic preserved, restyled) ---- */
 let TREE = null, NAMES = {}, TREE_CATALOG = "", UID = 1, DRAG_UID = null, PICK_TARGET = null;
 const val = id => (document.getElementById(id) || {}).value?.trim() || "";
@@ -655,6 +772,60 @@ const App = {
       {method: "POST", body: JSON.stringify({menu: "mainMenu", type, enabled})});
       toast(enabled ? "Module enabled" : "Module disabled", "success"); V.modules(); } catch (e) { fail(e); }
   },
+
+  // ---- vector styles ----
+  searchStyles() { window.__styleQ = val("styq"); V.styles(); },
+  newStyle() {
+    $("#modal-root").innerHTML = `<div class="drawer-mask" onclick="App.closeModal()"></div>
+      <div class="drawer"><div class="dhead"><h2>New style</h2>${UI.btn({icon:"x",variant:"ghost",onclick:"App.closeModal()"})}</div>
+        <div class="dbody">${UI.field({label:"styleId (referenced by a layer's styleId)", control:`<input id="ns-id" placeholder="my-style">`})}
+          <div style="height:1rem"></div>${UI.btn({label:"Create style", variant:"primary", icon:"plus", onclick:"App.createStyle()"})}</div></div>`;
+    setTimeout(() => document.getElementById("ns-id")?.focus(), 30);
+  },
+  async createStyle() {
+    try {
+      const r = await api("/api/admin/styles", {method:"POST", body: JSON.stringify(
+        {catalog: catalogOf(state.portal), styleId: val("ns-id")})});
+      this.closeModal(); toast(`Style “${r.styleId}” created`, "success"); this.editStyle(r.key);
+    } catch (e) { fail(e); }
+  },
+  async editStyle(key) {
+    try {
+      const d = await api(`/api/admin/styles/${encodeURIComponent(key)}`);
+      _styleEdit = {key, styleId: d.styleId, attrs: d.attrs, usage: d.usage, mode: "form", confirmDel: false};
+      styleWorking();  // normalize rules[0].style
+      V.styles();
+    } catch (e) { fail(e); }
+  },
+  async dupStyle(key, styleId) {
+    try {
+      const d = await api(`/api/admin/styles/${encodeURIComponent(key)}`);
+      const r = await api("/api/admin/styles", {method:"POST", body: JSON.stringify(
+        {catalog: catalogOf(state.portal), styleId: styleId + "-copy", attrs: d.attrs})});
+      toast(`Duplicated → ${r.styleId}`, "success"); this.editStyle(r.key);
+    } catch (e) { fail(e); }
+  },
+  closeStyle() { _styleEdit = null; V.styles(); },
+  styleColor(prop) { styleWorking()[prop] = hexAlpha($("#" + prop + "-c").value, $("#" + prop + "-a").value); refreshPreview(); },
+  styleNum(prop) { const v = $("#s-" + prop).value; const w = styleWorking(); if (v === "") delete w[prop]; else w[prop] = Number(v); refreshPreview(); },
+  styleText(prop) { const v = $("#s-" + prop).value; const w = styleWorking(); if (v === "") delete w[prop]; else w[prop] = v; refreshPreview(); },
+  styleMode(m) {
+    if (m === "form") { const ta = $("#sty-json"); if (ta) { try { _styleEdit.attrs = JSON.parse(ta.value); } catch (e) { $("#sty-err").innerHTML = UI.banner("Invalid JSON: " + esc(e.message), "warn", "x"); return; } } }
+    _styleEdit.mode = m; renderStyleEditor();
+  },
+  async saveStyle() {
+    if (_styleEdit.mode === "raw") { const ta = $("#sty-json"); try { _styleEdit.attrs = JSON.parse(ta.value); } catch (e) { $("#sty-err").innerHTML = UI.banner("Invalid JSON: " + esc(e.message), "warn", "x"); return; } }
+    try {
+      const r = await api(`/api/admin/styles/${encodeURIComponent(_styleEdit.key)}`, {method:"PUT", body: JSON.stringify({attrs: _styleEdit.attrs})});
+      _styleEdit.usage = r.usage; toast("Style saved to draft", "success"); renderStyleEditor();
+    } catch (e) { fail(e); }
+  },
+  delStyle() { _styleEdit.confirmDel = true; renderStyleEditor(); },
+  delCancel() { _styleEdit.confirmDel = false; renderStyleEditor(); },
+  async delStyleConfirm() {
+    try { await api(`/api/admin/styles/${encodeURIComponent(_styleEdit.key)}`, {method:"DELETE"});
+      toast("Style deleted", "success"); this.closeStyle(); } catch (e) { fail(e); }
+  },
   _parseAdv() {
     try { return {ok: JSON.parse($("#adv-json").value)}; }
     catch (e) { return {err: e.message}; }
@@ -759,7 +930,8 @@ window.App = App; window.val = val;
 /* ============================ router ============================ */
 function navigate() {
   const route = (location.hash.slice(1) || "settings");
-  if (!PAGES[route]) { location.hash = "services"; return; }
+  if (!PAGES[route]) { location.hash = "settings"; return; }
+  if (route !== "styles") _styleEdit = null;   // leave the style editor when navigating away
   renderShell(route);
   (V[route] || (() => {}))();
 }

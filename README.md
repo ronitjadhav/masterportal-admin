@@ -20,9 +20,11 @@ to a **stock, unforked** Masterportal over HTTP.
   (JWKS signature, issuer, expiry, dedicated API audience, asymmetric algs)
   **plus** a role grant; `admin` always passes. Works with any OIDC IdP.
 - **Admin console at `/admin/`.** Create/configure portals (branding, map view,
-  controls, modules), a drag-drop **layer-tree** editor, a **grants** matrix,
-  **WMS capabilities import**, **draft → publish → rollback** snapshots, an
-  advanced raw-config editor, and an append-only audit log. Admin identity is
+  controls, modules), a drag-drop **layer-tree** editor, a **vector-style**
+  editor (color pickers + live preview, with a raw-JSON mode for full rule
+  power), a **grants** matrix, **WMS capabilities import**,
+  **draft → publish → rollback** snapshots, an advanced raw-config editor, and
+  an append-only audit log. Admin identity is
   fully separate (own OIDC client + audience) with a BFF login (HttpOnly
   session cookie — no admin token in JS), so a portal-side XSS can't reach it.
 - **Production-shaped.** Alembic migrations, SQLite **or** PostgreSQL, ETag +

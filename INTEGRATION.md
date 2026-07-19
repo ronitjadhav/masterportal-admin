@@ -159,6 +159,13 @@ writing the **draft** (publish to go live):
 - **Modules** — enable/disable the menu tools/plugins (about, legend, measure,
   draw, print, …); "needs config" modules render with defaults and are
   fine-tuned later.
+- **Styles** — vector styling (`style.json`, catalog-scoped). A structured
+  editor covers the common single-symbol case (circle / icon / line / polygon)
+  with colour pickers, opacity, sizes, and a live SVG preview; an **Edit as
+  JSON** mode exposes the full rule/condition/hatch/cluster/label power so
+  nothing is unreachable. Create / duplicate / delete, with a "used by N
+  layers" indicator. Layers reference a style by its `styleId`. Edits are
+  catalog-wide (shared like services) and follow the same draft → publish flow.
 - **Advanced config** — a validated raw-JSON editor for the whole
   `portalConfig`. This is the escape hatch so *nothing* is unreachable: any
   field the structured forms don't cover yet (per-module config,

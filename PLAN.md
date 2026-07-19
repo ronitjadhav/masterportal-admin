@@ -185,8 +185,17 @@ catalog **picker** to add layers. Edits save to the draft → reload to preview
 → Publish to go live. This completes the original "add/remove layers and
 layer groups" vision.
 
-**Phase 4 is complete.** All admin capability now exists; what remains is
-Phase 5 ops-hardening.
+**Done — vector-style editor.** `style.json` is now managed in the console
+(catalog-scoped): list with live SVG swatches + usage, a structured editor for
+the common single-symbol styles (circle/icon/line/polygon — colour pickers,
+opacity, sizes, live preview), an advanced raw-JSON mode for the full
+rule/condition/hatch/cluster/label power, and create/duplicate/delete.
+`GET/POST/PUT/DELETE /api/admin/styles`; `styleId` immutable; edits are
+draft → publish like everything else.
+
+**Phase 4 is complete.** Every config surface — portalConfig (settings +
+modules + advanced), layerConfig (tree), and style.json (styles) — is now
+editable in the console. What remains is Phase 5 ops-hardening.
 
 **Phase 5 — Ops (in progress):**
 - **Done — rate limiting.** Per-caller sliding-window limiter
