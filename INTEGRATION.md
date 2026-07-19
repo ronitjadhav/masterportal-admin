@@ -155,8 +155,13 @@ writing the **draft** (publish to go live):
   `mapView` startCenter / startZoomLevel / extent / epsg / backgroundImage)
   and **controls** (zoom, orientation, fullScreen, totalView, rotation,
   backForward, button3d). Also **create** (＋ New), **clone**, and **delete**.
-- **Layer tree** — the `layerConfig` editor (folders, ordering, add/remove).
-- **Modules** — enable/disable the menu tools/plugins (about, legend, measure,
+- **Layers** — the portal's actual layers (`layerConfig`), each shown with its
+  **type** (WMS/WFS/…), **access** (public/login), and **style** (swatch +
+  styleId). Drag-drop reorder, folders, add from the Catalog, remove, and
+  **assign a per-layer style** (vector layers get a Style button → pick from
+  the style library; the override lives on the tree element). This is the
+  home screen — it shows *your* few layers, not the whole library.
+- **Tools & plugins** — enable/disable the menu modules (about, legend, measure,
   draw, print, …); "needs config" modules render with defaults and are
   fine-tuned later.
 - **Styles** — vector styling (`style.json`, catalog-scoped). A structured
@@ -172,7 +177,11 @@ writing the **draft** (publish to go live):
   `searchBar.searchInterfaces`, `tree` auto-mode, GFI/mouseHover styling, 3D
   params) is editable here. Malformed structure is rejected; a bad save is
   recoverable via Publish/rollback.
-- **Services / Import WMS** — the catalog.
+- **Catalog / Import WMS** — the shared *library* of all available layers (a
+  catalog can hold thousands). Each row shows whether it's "in this portal",
+  and an **in-this-portal** filter narrows the view to just the ones your
+  portal uses. This is where you secure layers and import new ones; you *add*
+  them to a portal from the **Layers** tab.
 - **Access & roles / Publish / Audit** — as before.
 
 `basic` and `master` in `portal/` are Masterportal's own **example** portals;

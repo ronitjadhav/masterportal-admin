@@ -19,12 +19,15 @@ to a **stock, unforked** Masterportal over HTTP.
 - **OIDC + deny-by-default RBAC.** Secured layers need a verified OIDC token
   (JWKS signature, issuer, expiry, dedicated API audience, asymmetric algs)
   **plus** a role grant; `admin` always passes. Works with any OIDC IdP.
-- **Admin console at `/admin/`.** Create/configure portals (branding, map view,
-  controls, modules), a drag-drop **layer-tree** editor, a **vector-style**
-  editor (color pickers + live preview, with a raw-JSON mode for full rule
-  power), a **grants** matrix, **WMS capabilities import**,
-  **draft → publish → rollback** snapshots, an advanced raw-config editor, and
-  an append-only audit log. Admin identity is
+- **Admin console at `/admin/`.** Built around the analyst's mental model:
+  a **Layers** view showing the portal's actual layers with each one's **type,
+  access (public/login), and style** at a glance (drag-drop reorder, folders,
+  add from the catalog, assign a style per layer); a **Catalog** = the shared
+  library of all available layers (with an "in this portal" filter); a
+  **vector-style** editor (color pickers + live preview, raw-JSON mode for full
+  power); portal **Settings** (branding/map/controls) and **Tools & plugins**;
+  a **grants** matrix; **WMS import**; **draft → publish → rollback** snapshots;
+  an advanced raw-config editor; and an append-only audit log. Admin identity is
   fully separate (own OIDC client + audience) with a BFF login (HttpOnly
   session cookie — no admin token in JS), so a portal-side XSS can't reach it.
 - **Production-shaped.** Alembic migrations, SQLite **or** PostgreSQL, ETag +

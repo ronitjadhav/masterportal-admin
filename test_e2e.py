@@ -64,6 +64,7 @@ def main():
     token, id_token = grant["access_token"], grant["id_token"]
     auth = {"Authorization": f"Bearer {token}"}
     admin_auth = {"Authorization": f"Bearer {get_token('admin-demo', 'admin-demo')['access_token']}"}
+    adm = {"Authorization": f"Bearer {get_token_client('masterportal-admin', 'admin-demo', 'admin-demo')}"}  # admin API
     ensure_fixtures()
     print("1. got Keycloak tokens for 'demo' (user) and 'admin-demo' (admin); fixtures ensured")
 
@@ -126,6 +127,17 @@ def main():
     assert len(basic) == 23, f"basic portal serves {len(basic)} services, expected 23"
     assert all(s["url"].startswith(f"{PUB}/geo/basic:") for s in basic if "url" in s and s["url"].startswith("http"))
     print(f"3. portal scoping: basic serves exactly its own {len(basic)} services")
+
+    # --- UX: Layers view enrichment + Catalog "in this portal" awareness
+    tr = httpx.get(f"{BASE}/api/admin/portals/basic/tree", headers=adm).json()
+    assert "layers" in tr and all("typ" in v and "is_public" in v for v in tr["layers"].values())
+    some = next(iter(tr["layers"].values()))
+    assert some.get("name") is not None                       # enriched name/type/access per layer
+    full = httpx.get(f"{BASE}/api/admin/services?catalog=basic&portal=basic&limit=200", headers=adm).json()
+    assert full["used_in_portal"] is not None and any(i["in_portal"] for i in full["items"])
+    only = httpx.get(f"{BASE}/api/admin/services?catalog=basic&portal=basic&in_portal=true&limit=200", headers=adm).json()
+    assert only["items"] and all(i["in_portal"] for i in only["items"]) and len(only["items"]) <= full["total"]
+    print(f"3b. Layers enriched (type/access/style); Catalog 'in this portal' filter → {len(only['items'])} of {full['total']}")
 
     caps = {"service": "WMS", "request": "GetCapabilities"}
     assert httpx.get(f"{BASE}/geo/{SECURED}", params=caps).status_code == 401

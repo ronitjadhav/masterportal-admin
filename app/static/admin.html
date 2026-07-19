@@ -267,13 +267,13 @@ const catalogOf = slug => (state.portals.find(p => p.slug === slug) || {}).catal
 const NAV = [
   {group: "Portal", items: [
     {route: "settings", label: "Settings", icon: "sliders"},
-    {route: "tree", label: "Layer tree", icon: "tree"},
-    {route: "modules", label: "Modules", icon: "grid"},
-    {route: "advanced", label: "Advanced config", icon: "code"},
+    {route: "tree", label: "Layers", icon: "tree"},
+    {route: "modules", label: "Tools & plugins", icon: "grid"},
     {route: "publish", label: "Publish", icon: "publish"},
+    {route: "advanced", label: "Advanced config", icon: "code"},
   ]},
-  {group: "Catalog", items: [
-    {route: "services", label: "Services", icon: "layers"},
+  {group: "Library", items: [
+    {route: "services", label: "Catalog", icon: "layers"},
     {route: "styles", label: "Styles", icon: "brush"},
     {route: "import", label: "Import WMS", icon: "import"},
   ]},
@@ -284,12 +284,12 @@ const NAV = [
 ];
 const PAGES = {
   settings: {title: "Portal settings", sub: "Branding, map view and controls for this portal"},
-  tree: {title: "Layer tree", sub: "Arrange folders and layers for the portal"},
-  modules: {title: "Modules", sub: "Enable the tools and plugins available in this portal"},
+  tree: {title: "Layers", sub: "The layers in this portal — their type, access and style"},
+  modules: {title: "Tools & plugins", sub: "Enable the tools available in this portal"},
   advanced: {title: "Advanced config", sub: "Edit the raw portalConfig for fields not yet in the forms"},
   publish: {title: "Publish", sub: "Stage the draft, publish a version, roll back"},
-  services: {title: "Services", sub: "Layers in the selected portal's catalog"},
-  styles: {title: "Vector styles", sub: "How WFS/OAF/GeoJSON layers are drawn (style.json)"},
+  services: {title: "Catalog", sub: "Shared library of all available layers — add these to a portal's Layers"},
+  styles: {title: "Vector styles", sub: "Reusable styling for WFS/OAF/GeoJSON layers (style.json)"},
   import: {title: "Import WMS", sub: "Add layers from a WMS GetCapabilities document"},
   grants: {title: "Access & roles", sub: "Who may use secured layers, modules and portals"},
   audit: {title: "Audit log", sub: "Every administrative change, most recent first"},
@@ -332,31 +332,38 @@ const V = {};
 V.services = async () => {
   const cat = catalogOf(state.portal);
   const q = window.__svcQ || "";
-  const search = `<div style="display:flex;gap:.5rem;flex:1;max-width:420px">
+  const onlyIn = window.__svcOnlyIn || false;
+  const search = `<div style="display:flex;gap:.5rem;flex:1;max-width:520px;align-items:center">
       <div style="position:relative;flex:1">
         <span style="position:absolute;left:.6rem;top:.55rem;color:var(--text-faint)">${icon("search",16)}</span>
         <input id="svcq" value="${attr(q)}" placeholder="Search id or name…" style="padding-left:2rem"
           onkeydown="if(event.key==='Enter')App.searchServices()"></div>
-      ${UI.btn({label: "Search", onclick: "App.searchServices()"})}</div>`;
-  $("#view").innerHTML = UI.card({title: `Catalog: ${cat}`, actions: search, flush: true,
-    body: `<div id="svc-body">${UI.empty({title: "Loading…"})}</div>`});
+      ${UI.btn({label: "Search", onclick: "App.searchServices()"})}
+      <label style="display:flex;gap:.35rem;align-items:center;white-space:nowrap;font-size:12.5px;color:var(--text-muted)">
+        <input type="checkbox" ${onlyIn ? "checked" : ""} onchange="App.toggleOnlyIn(this.checked)" style="width:auto"> in this portal only</label>`;
+  $("#view").innerHTML =
+    UI.banner(`This is the shared <b>library</b> for catalog “${esc(cat)}” — every layer available to add to a portal. Your portal shows only the ones you add under <b>Layers</b>.`, "info", "layers")
+    + UI.card({title: `Catalog: ${cat}`, actions: search, flush: true,
+        body: `<div id="svc-body">${UI.empty({title: "Loading…"})}</div>`});
   try {
-    const data = await api(`/api/admin/services?catalog=${encodeURIComponent(cat)}&q=${encodeURIComponent(q)}&limit=150`);
+    const data = await api(`/api/admin/services?catalog=${encodeURIComponent(cat)}&q=${encodeURIComponent(q)}`
+      + `&portal=${encodeURIComponent(state.portal)}&in_portal=${onlyIn}&limit=150`);
     const rows = data.items.map(s => [
+      s.in_portal ? UI.badge("in portal", "green") : `<span class="hint">library</span>`,
       `<span class="mono">${esc(s.id)}</span>`, esc(s.name || "—"), UI.badge(s.typ || "?", "gray"),
       s.is_public ? UI.badge("public", "green") : UI.badge("login required", "amber"),
       s.allow_transactions ? UI.badge("WFS-T on", "violet") : `<span class="hint">off</span>`,
-      s.upstream_auth_env ? `<span class="mono">${esc(s.upstream_auth_env)}</span>` : "",
       `<div style="display:flex;gap:.35rem;justify-content:flex-end">
         ${UI.btn({label: s.is_public ? "Require login" : "Make public", size: "sm",
                   onclick: `App.patchSvc('${attr(s.key)}',{is_public:${!s.is_public}})`})}
         ${UI.btn({label: s.allow_transactions ? "WFS-T off" : "WFS-T on", size: "sm",
                   onclick: `App.patchSvc('${attr(s.key)}',{allow_transactions:${!s.allow_transactions}})`})}</div>`,
     ]);
+    const inCount = data.used_in_portal;
     $("#svc-body").innerHTML = `<div style="padding:.55rem 1.15rem;color:var(--text-muted);font-size:12.5px">
-        ${data.items.length} of ${data.total} services</div>` +
-      UI.table({cols: ["ID", "Name", "Type", "Access", "Transactions", "Secret env", ""], rows,
-        empty: {icon: "layers", title: "No services match", hint: "Try a different search or import a WMS."}});
+        showing ${data.items.length} of ${data.total}${inCount != null ? ` · ${inCount} used in this portal` : ""}</div>` +
+      UI.table({cols: ["", "ID", "Name", "Type", "Access", "Transactions", ""], rows,
+        empty: {icon: "layers", title: "No layers match", hint: "Try a different search, or Import WMS to add more."}});
   } catch (e) { fail(e); }
 };
 
@@ -633,6 +640,7 @@ function refreshPreview() { const p = $("#sty-preview"); if (p) p.innerHTML = sw
 
 /* ---- tree view (logic preserved, restyled) ---- */
 let TREE = null, NAMES = {}, TREE_CATALOG = "", UID = 1, DRAG_UID = null, PICK_TARGET = null;
+let LAYERS = {}, STYLE_SWATCHES = {}, STYLE_PICK_UID = null;
 const val = id => (document.getElementById(id) || {}).value?.trim() || "";
 
 V.tree = async () => {
@@ -645,6 +653,7 @@ V.tree = async () => {
   try {
     const t = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/tree`);
     TREE = t.layer_config; NAMES = t.names || {}; TREE_CATALOG = t.catalog;
+    LAYERS = t.layers || {}; STYLE_SWATCHES = t.styleSwatches || {};
     for (const g of ["baselayer", "subjectlayer"]) if (!TREE[g]) TREE[g] = {elements: []};
     for (const g of ["baselayer", "subjectlayer"]) assignUids(TREE[g].elements);
     renderTree();
@@ -656,10 +665,27 @@ function locate(uid) { for (const g of ["baselayer", "subjectlayer"]) { const h 
 function containerArray(cuid) { if (cuid.startsWith("g:")) return TREE[cuid.slice(2)].elements; const h = locate(cuid); if (!h || h.node.type !== "folder") return null; return h.node.elements || (h.node.elements = []); }
 function isWithin(cuid, srcUid) { if (cuid.startsWith("g:") || cuid === srcUid) return cuid === srcUid; const s = locate(srcUid); return s && s.node.type === "folder" && !!findNode(cuid, s.node.elements); }
 function moveNode(src, dest) { if (isWithin(dest, src)) return; const d = containerArray(dest); if (!d) return; const h = locate(src); if (!h) return; const [n] = h.parent.splice(h.index, 1); d.push(n); renderTree(); }
+function layerInfo(el) {
+  const group = Array.isArray(el.id);
+  const base = group ? null : String(el.id).split(".")[0];
+  const svc = base ? (LAYERS[base] || {}) : {};
+  return {group, base, typ: group ? "GROUP" : svc.typ,
+          name: el.name || svc.name || (group ? el.id.join(", ") : ""),
+          isPublic: svc.is_public, styleId: el.styleId || svc.styleId,
+          overridden: !!el.styleId, known: base ? base in LAYERS : true};
+}
 function layerLabel(el) {
-  if (Array.isArray(el.id)) return `${UI.badge("GROUP", "violet")} <span class="lyr">${esc(el.name || el.id.join(", "))}</span>`;
-  const base = String(el.id).split(".")[0];
-  return `<span class="lyr">${esc(el.name || NAMES[base] || "")} <span class="lid">${esc(el.id)}</span></span>`;
+  const i = layerInfo(el);
+  const nm = `<span class="lyr">${esc(i.name)} <span class="lid">${esc(Array.isArray(el.id) ? el.id.join(",") : el.id)}</span></span>`;
+  const typ = i.typ ? UI.badge(i.typ, i.typ === "GROUP" ? "violet" : "gray") : (i.known ? "" : UI.badge("inline", "gray"));
+  const access = i.isPublic === false ? UI.badge("login", "amber") : (i.isPublic ? UI.badge("public", "green") : "");
+  let style = "";
+  if (i.styleId) {
+    const sw = STYLE_SWATCHES[String(i.styleId)];
+    style = `<span title="style: ${attr(i.styleId)}${i.overridden ? ' (per-layer override)' : ''}" style="display:inline-flex;align-items:center;gap:.25rem">
+      ${sw ? swatch(sw, 18) : ""}<span class="lid">${esc(i.styleId)}${i.overridden ? "*" : ""}</span></span>`;
+  }
+  return `${nm}<span style="display:inline-flex;gap:.4rem;align-items:center;margin-left:.5rem">${typ}${access}${style}</span>`;
 }
 function renderElements(els) {
   return `<ul class="tree">` + els.map(el => {
@@ -674,8 +700,17 @@ function renderElements(els) {
           ${UI.btn({label: "folder", icon: "plus", variant: "ghost", size: "sm", onclick: `App.treeAddFolder('${el._uid}')`})}
           ${UI.btn({label: "layer", icon: "plus", variant: "ghost", size: "sm", onclick: `App.openPicker('${el._uid}')`})}
           ${ctrls}</div>${renderElements(el.elements || [])}</li>`;
+    const i = layerInfo(el);
+    const vector = ["WFS", "OAF", "GeoJSON", "VectorTile", "SensorThings"].includes(i.typ);
+    const styleBtn = (!i.group && (vector || i.styleId))
+      ? UI.btn({label: "Style", icon: "brush", variant: "ghost", size: "sm", onclick: `App.pickStyle('${el._uid}')`}) : "";
     return `<li class="node" draggable="true" data-uid="${el._uid}">
-      <div class="rowline"><span class="grip">${icon("grip",16)}</span>${layerLabel(el)}${ctrls}</div></li>`;
+      <div class="rowline"><span class="grip">${icon("grip",16)}</span>${layerLabel(el)}
+        <div class="row-actions">${styleBtn}
+          ${UI.btn({icon: "up", variant: "ghost", size: "sm", onclick: `App.treeReorder('${el._uid}',-1)`})}
+          ${UI.btn({icon: "down", variant: "ghost", size: "sm", onclick: `App.treeReorder('${el._uid}',1)`})}
+          ${UI.btn({icon: "x", variant: "ghost", size: "sm", onclick: `App.treeRemove('${el._uid}')`})}</div>
+      </div></li>`;
   }).join("") + `</ul>`;
 }
 function renderGroup(g) {
@@ -852,6 +887,7 @@ const App = {
       toast("Service updated", "success"); V.services(); } catch (e) { fail(e); }
   },
   searchServices() { window.__svcQ = val("svcq"); V.services(); },
+  toggleOnlyIn(on) { window.__svcOnlyIn = on; V.services(); },
 
   _rm: (kind, payload) => UI.btn({label: "Remove", variant: "danger", size: "sm",
     onclick: `App.removeGrant('${kind}',${attr(JSON.stringify(payload))})`}),
@@ -892,6 +928,36 @@ const App = {
   treeRemove(uid) { const h = locate(uid); h.parent.splice(h.index, 1); renderTree(); },
   treeAddFolder(cuid) { containerArray(cuid).push({type: "folder", name: "New folder", elements: [], _uid: "u" + (UID++)}); renderTree(); },
   treeRename(uid, name) { locate(uid).node.name = name; },
+  async pickStyle(uid) {
+    STYLE_PICK_UID = uid;
+    const cur = layerInfo(locate(uid).node).styleId;
+    $("#modal-root").innerHTML = `<div class="drawer-mask" onclick="App.closeModal()"></div>
+      <div class="drawer"><div class="dhead"><h2>Choose a style</h2>${UI.btn({icon:"x",variant:"ghost",onclick:"App.closeModal()"})}</div>
+        <div class="dbody">
+          <div class="hit" onclick="App.setLayerStyle(null)"><b>Default</b> <span class="lid">use the catalog service's style${cur?"":" (current)"}</span></div>
+          <input id="sp-q" placeholder="search styleId…" oninput="App.pickStyleSearch()" style="margin:.5rem 0">
+          <div id="sp-results">Loading…</div></div></div>`;
+    setTimeout(() => document.getElementById("sp-q")?.focus(), 30);
+    this.pickStyleSearch();
+  },
+  async pickStyleSearch() {
+    try {
+      const q = val("sp-q");
+      const d = await api(`/api/admin/styles?catalog=${encodeURIComponent(TREE_CATALOG)}&q=${encodeURIComponent(q)}`);
+      $("#sp-results").innerHTML = d.items.slice(0, 60).map(s =>
+        `<div class="hit" onclick='App.setLayerStyle(${JSON.stringify(s.styleId)}, ${JSON.stringify(s.firstStyle || {})})'>
+          ${swatch(s.firstStyle, 20)} <span class="mono">${esc(s.styleId)}</span>
+          <span class="lid">${styleKind(s.firstStyle)}${s.usage ? " · " + s.usage + " layer(s)" : ""}</span></div>`).join("")
+        || UI.empty({title: "No styles", icon: "brush"});
+    } catch (e) { fail(e); }
+  },
+  setLayerStyle(styleId, firstStyle) {
+    const node = locate(STYLE_PICK_UID).node;
+    if (styleId === null) delete node.styleId;
+    else { node.styleId = String(styleId); STYLE_SWATCHES[String(styleId)] = firstStyle || {}; }
+    this.closeModal(); renderTree();
+    toast(styleId === null ? "Layer set to default style (draft)" : `Style “${styleId}” applied to layer (draft)`, "success");
+  },
   async saveTree() {
     try { const r = await api(`/api/admin/portals/${encodeURIComponent(state.portal)}/tree`,
       {method: "PUT", body: JSON.stringify({layer_config: stripUids(TREE)})});

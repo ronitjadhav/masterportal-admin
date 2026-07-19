@@ -371,7 +371,7 @@ def toggle_module(slug: str, payload: dict = Body(...), claims: dict = Depends(r
 
 @router.get("/api/admin/services")
 def services(catalog: str | None = None, q: str | None = None,
-             offset: int = 0, limit: int = 50,
+             offset: int = 0, limit: int = 50, portal: str | None = None, in_portal: bool = False,
              claims: dict = Depends(require_admin), db: Session = Depends(db_session)):
     query = db.query(Service)
     if catalog:
@@ -381,8 +381,19 @@ def services(catalog: str | None = None, q: str | None = None,
         needle = q.lower()
         rows = [s for s in rows if needle in s.external_id.lower()
                 or needle in str(s.attrs.get("name", "")).lower()]
-    return {"total": len(rows),
-            "items": [_service_row(s) for s in rows[offset:offset + min(limit, 200)]]}
+    # which of these are actually used in the given portal's layer tree
+    used: set[str] = set()
+    if portal:
+        p = db.get(Portal, portal)
+        if p:
+            for group in p.layer_config.values():
+                if isinstance(group, dict):
+                    _collect_ids(group.get("elements"), used)
+    if in_portal:
+        rows = [s for s in rows if s.external_id in used]
+    return {"total": len(rows), "used_in_portal": len(used) if portal else None,
+            "items": [{**_service_row(s), "in_portal": s.external_id in used}
+                      for s in rows[offset:offset + min(limit, 200)]]}
 
 
 @router.get("/api/admin/grants")
@@ -621,12 +632,42 @@ def get_tree(slug: str, claims: dict = Depends(require_admin),
     for group in portal.layer_config.values():
         if isinstance(group, dict):
             _collect_ids(group.get("elements"), ids)
-    names = {}
+    layers: dict[str, dict] = {}
     if ids:
         for s in (db.query(Service)
                   .filter(Service.catalog == portal.catalog, Service.external_id.in_(ids))):
-            names[s.external_id] = s.attrs.get("name")
-    return {"catalog": portal.catalog, "layer_config": portal.layer_config, "names": names}
+            layers[s.external_id] = {"name": s.attrs.get("name"), "typ": s.attrs.get("typ"),
+                                     "is_public": s.is_public, "styleId": s.attrs.get("styleId")}
+
+    # effective styleId per tree layer (element override wins over the service's)
+    style_ids: set[str] = set()
+
+    def walk_styles(elements):
+        for el in elements or []:
+            if el.get("type") == "folder":
+                walk_styles(el.get("elements"))
+            else:
+                sid = el.get("styleId")
+                if not sid:
+                    el_id = el.get("id")
+                    base = str(el_id).split(".")[0] if not isinstance(el_id, list) else None
+                    sid = layers.get(base, {}).get("styleId") if base else None
+                if sid:
+                    style_ids.add(str(sid))
+    for group in portal.layer_config.values():
+        if isinstance(group, dict):
+            walk_styles(group.get("elements"))
+
+    swatches: dict[str, dict] = {}
+    if style_ids:
+        keys = [scoped_key(portal.catalog, s) for s in style_ids]
+        for st in db.query(Style).filter(Style.catalog == portal.catalog, Style.key.in_(keys)):
+            rules = st.attrs.get("rules") or []
+            swatches[_sid(st)] = rules[0].get("style", {}) if rules else {}
+
+    return {"catalog": portal.catalog, "layer_config": portal.layer_config,
+            "names": {k: v["name"] for k, v in layers.items()},   # kept for compatibility
+            "layers": layers, "styleSwatches": swatches}
 
 
 @router.put("/api/admin/portals/{slug}/tree")
