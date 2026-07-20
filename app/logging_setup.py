@@ -20,6 +20,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+from .metrics import metrics
+
 
 def _claimed_actor(auth_header: str) -> str | None:
     """Best-effort subject from a bearer token WITHOUT verifying it."""
@@ -75,12 +77,16 @@ class AccessLogMiddleware:
             await self.app(scope, receive, send_wrapper)
         finally:
             code = status["code"]
+            duration = time.perf_counter() - start
+            path = scope.get("path")
+            if path != "/metrics":   # don't let scrapes inflate their own numbers
+                metrics.observe(scope.get("method", "-"), code, duration)
             _emit("WARNING" if code >= 400 else "INFO", "http_request", {
                 "request_id": rid,
                 "method": scope.get("method"),
                 "path": scope.get("path"),
                 "status": code,
-                "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+                "duration_ms": round(duration * 1000, 1),
                 "actor": _claimed_actor(headers.get("authorization", "")) or "-",
                 "client": (scope.get("client") or ["-"])[0],
                 "xff": headers.get("x-forwarded-for", ""),

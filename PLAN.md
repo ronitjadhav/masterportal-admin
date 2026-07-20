@@ -271,7 +271,18 @@ editable in the console. What remains is Phase 5 ops-hardening.
   `X-Forwarded-For` (real periodic sweep). Findings + posture written up in
   `SECURITY.md`. New standalone checks `test_review_fixes.py` (+ `test_sessions.py`)
   run in CI without Keycloak.
-- **Next:** metrics endpoint.
+- **Metrics (done 2026-07-20):** `GET /metrics` Prometheus exposition
+  (`http_requests_total` by method/status + `http_request_duration_seconds`
+  histogram), fed by the access-log middleware; hand-rolled (no
+  prometheus_client dep — label values are server-controlled). Unauthenticated
+  and not routed through the public nginx origin (scrape internally). Self-check
+  in `app/metrics.py` runs in CI. `smoke_login.py` added to exercise the admin
+  BFF login end-to-end (state-cookie flow), validated against the full stack.
+- **Phase 5 complete.** Rate limiting, Alembic, Postgres, ETag, gzip, structured
+  logging, deployment (Docker/compose/nginx), CI, DB-backed sessions, ops runbook,
+  security review + hardening, and metrics are all done. Remaining ideas are
+  future enhancements, not gaps: Redis-backed rate-limit window (only needed for
+  heavy multi-worker), per-module config forms, and a fuller metrics set.
 
 ## 8. Portal model & full config coverage (revised 2026-07-19)
 

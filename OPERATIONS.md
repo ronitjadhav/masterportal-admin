@@ -124,6 +124,10 @@ backups for data loss.
 - **Logs:** one structured JSON line per request on **stderr** (`request_id`,
   method, path, status, `duration_ms`, actor); 4xx/5xx at WARNING.
   `docker compose -f docker-compose.prod.yml logs -f backend`.
+- **Metrics:** Prometheus exposition at **`GET /metrics`** (`http_requests_total`
+  by method/status, `http_request_duration_seconds` histogram). Unauthenticated
+  and deliberately **not** routed through the public nginx origin — scrape it
+  from the backend on the internal network / behind your firewall.
 - **Scaling:** admin sessions are DB-backed, so the backend runs multi-worker /
   multi-replica safely — add `--workers N` to the `uvicorn` command or scale the
   service. The rate-limit window is per-worker (approximate) until it moves to a

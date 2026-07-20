@@ -32,6 +32,7 @@ jobs:
       # the security-review fixes (mutation-gate encoding, SSRF CGNAT, live access).
       - run: python test_sessions.py
       - run: python test_review_fixes.py
+      - run: python -m app.metrics   # Prometheus exposition self-check
 
       # Dev IdP: the realm (clients, roles, demo users) is imported from
       # keycloak/realm-masterportal.json. KC_HOSTNAME fixes the token issuer to

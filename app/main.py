@@ -13,10 +13,12 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
-from . import access, admin, configsrc, logging_setup, proxy, ratelimit, seed, settings
+from . import (access, admin, configsrc, logging_setup, proxy, ratelimit, seed,
+               settings)
+from .metrics import metrics
 from .auth import current_user
 from .db import Portal, PortalRole, db_session, init_db
 
@@ -93,6 +95,15 @@ def get_portal(slug: str, db: Session, uroles: set[str] | None) -> Portal:
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def prometheus_metrics():
+    # Prometheus text exposition. Unauthenticated (scrapers don't send creds);
+    # expose only on an internal network / firewall it — it reveals traffic
+    # volume + latency, nothing sensitive. See SECURITY.md.
+    return PlainTextResponse(metrics.render(),
+                             media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/api/portals")
