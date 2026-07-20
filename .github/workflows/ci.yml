@@ -28,8 +28,10 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
 
-      # Fast DB-layer check (no Keycloak): admin session store persistence + GC.
+      # Fast checks that need no Keycloak: session store persistence + GC, and
+      # the security-review fixes (mutation-gate encoding, SSRF CGNAT, live access).
       - run: python test_sessions.py
+      - run: python test_review_fixes.py
 
       # Dev IdP: the realm (clients, roles, demo users) is imported from
       # keycloak/realm-masterportal.json. KC_HOSTNAME fixes the token issuer to

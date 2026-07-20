@@ -37,6 +37,7 @@ import ipaddress
 import os
 import re
 import socket
+import time
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -60,15 +61,35 @@ RELAY_HEADERS = {"content-type", "content-disposition", "cache-control"}
 TEXTUAL_TYPES = ("xml", "json", "text", "html")
 TRANSACTION_RE = re.compile(rb"<\s*(\w+:)?Transaction[\s>]", re.IGNORECASE)
 
+
+def _is_transaction(body: bytes) -> bool:
+    """True if a POST body is a WFS-T <Transaction>. Robust to the encoding
+    trick a raw-bytes scan misses: UTF-16/UTF-32 interleave ASCII with NUL
+    bytes, so the plain regex never matches the tag. We test the raw bytes AND
+    a NUL-stripped copy (which collapses UTF-16/32-encoded ASCII back to ASCII),
+    so a `charset=utf-16` transaction can't slip past a read-only service."""
+    if TRANSACTION_RE.search(body):
+        return True
+    return b"\x00" in body and bool(TRANSACTION_RE.search(body.replace(b"\x00", b"")))
+
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(settings.PROXY_TIMEOUT_S, connect=10),
     follow_redirects=False,
     limits=httpx.Limits(max_connections=100),
 )
 
-# host → allowed?  ponytail: unbounded process-lifetime cache; hosts come from
-# the admin-curated catalog, not from clients, so cardinality is small.
-_host_check_cache: dict[str, bool] = {}
+# CGNAT / shared address space (RFC 6598): not flagged by ipaddress.is_private,
+# but used to front cloud metadata (e.g. Alibaba 100.100.100.200) and carrier
+# internal networks — deny it explicitly alongside the standard bad ranges.
+_SHARED_ADDRESS_SPACE = ipaddress.ip_network("100.64.0.0/10")
+
+# host → (allowed?, checked_at).  Short TTL so a hostname that flips to a
+# private/metadata IP (DNS rebinding) is re-evaluated rather than trusted for
+# the process lifetime. Hosts come from the admin catalog, so cardinality is
+# small. The robust control against rebinding remains an egress firewall — this
+# is name-based and httpx re-resolves at connect time (documented residual).
+_HOST_CACHE_TTL = 300
+_host_check_cache: dict[str, tuple[bool, float]] = {}
 
 
 def _host_is_public(host: str) -> bool:
@@ -79,7 +100,10 @@ def _host_is_public(host: str) -> bool:
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+                or ip in _SHARED_ADDRESS_SPACE
+                or (ip.version == 6 and ip.ipv4_mapped is not None
+                    and ip.ipv4_mapped in _SHARED_ADDRESS_SPACE)):
             return False
     return bool(infos)
 
@@ -88,9 +112,12 @@ def _assert_allowed_upstream(url: str):
     if settings.PROXY_ALLOW_PRIVATE_UPSTREAMS:
         return
     host = urlsplit(url).hostname or ""
-    if host not in _host_check_cache:
-        _host_check_cache[host] = _host_is_public(host)
-    if not _host_check_cache[host]:
+    cached = _host_check_cache.get(host)
+    now = time.monotonic()
+    if cached is None or now - cached[1] > _HOST_CACHE_TTL:
+        cached = (_host_is_public(host), now)
+        _host_check_cache[host] = cached
+    if not cached[0]:
         raise HTTPException(502, "upstream address not allowed")
 
 
@@ -250,7 +277,7 @@ async def proxy(
     body = None
     if request.method == "POST":
         body = await _read_capped_body(request)
-        if not service.allow_transactions and (subpath or TRANSACTION_RE.search(body)):
+        if not service.allow_transactions and (subpath or _is_transaction(body)):
             # WFS-T <Transaction> or OGC API create/update — mutations are opt-in.
             raise HTTPException(403, "mutating requests are disabled for this service")
         headers["Content-Type"] = request.headers.get("Content-Type", "application/xml")

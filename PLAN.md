@@ -259,7 +259,19 @@ editable in the console. What remains is Phase 5 ops-hardening.
   and SQLite (`.backup`), what state lives where (one DB; sessions ephemeral;
   secrets/realm/certs out-of-band), snapshots-vs-backups, disaster-recovery
   steps, and a health/logs/scaling quick reference. Linked from the README.
-- **Next:** metrics, pen-test checklist.
+- **Adversarial security review + hardening (done 2026-07-20):** reviewed the
+  token, proxy, RBAC, and admin-BFF paths. Core design confirmed sound. Fixed:
+  a client-reachable WFS-T mutation-gate bypass via UTF-16-encoded bodies
+  (`proxy._is_transaction`); a snapshot info-disclosure where a layer secured
+  after publish stayed advertised to anon (`configsrc.with_live_access` — is_public
+  now read live like grants); XXE/billion-laughs in the capabilities import
+  (`defusedxml` + streamed size cap); OAuth login-session-swap CSRF (state cookie
+  bound to the browser); CSRF Origin check now fail-closed; SSRF guard extended to
+  CGNAT `100.64/10` with a cache TTL; rate-limiter memory growth from rotating
+  `X-Forwarded-For` (real periodic sweep). Findings + posture written up in
+  `SECURITY.md`. New standalone checks `test_review_fixes.py` (+ `test_sessions.py`)
+  run in CI without Keycloak.
+- **Next:** metrics endpoint.
 
 ## 8. Portal model & full config coverage (revised 2026-07-19)
 

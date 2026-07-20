@@ -176,6 +176,9 @@ def main():
     wfst = '<wfs:Transaction xmlns:wfs="http://www.opengis.net/wfs"></wfs:Transaction>'
     assert httpx.post(f"{BASE}/geo/{PUBLIC_WFS}", content=wfst,
                       headers={"Content-Type": "application/xml"}).status_code == 403
+    # …and a UTF-16-encoded Transaction can't slip past the byte-scan gate
+    assert httpx.post(f"{BASE}/geo/{PUBLIC_WFS}", content=wfst.encode("utf-16"),
+                      headers={"Content-Type": "application/xml; charset=utf-16"}).status_code == 403
     assert httpx.post(f"{BASE}/geo/{PUBLIC_WFS}/collections/x/items", content="{}").status_code == 403  # path write
     # …but a plain POST GetFeature (Masterportal's filter module) still works
     getfeature = ('<wfs:GetFeature xmlns:wfs="http://www.opengis.net/wfs" service="WFS" version="1.1.0">'
@@ -229,34 +232,52 @@ def main():
     print(f"15. WMS capabilities import (dry-run): {len(caps_preview['layers'])} layers parsed")
 
     # --- Phase 4: draft/publish snapshots (tested on 'basic' to stay isolated).
-    # deterministic start: 453 public, unpublished (independent of prior runs)
+    # A snapshot freezes CONTENT (config/tree/attrs); SECURITY (is_public/grants)
+    # is always applied LIVE on top, so securing a layer takes effect immediately
+    # even under a published snapshot. These checks prove both halves.
+    # deterministic start: 453 public, unpublished, known title.
     httpx.patch(f"{BASE}/api/admin/services/basic:453", headers=adm, json={"is_public": True})
     httpx.post(f"{BASE}/api/admin/portals/basic/activate", headers=adm, json={"version": None})
+    httpx.patch(f"{BASE}/api/admin/portals/basic/settings", headers=adm, json={"title": {"text": "Snapshot V1"}})
     live_count = len(httpx.get(f"{BASE}/api/portals/basic/services.json").json())
+
+    def served_title():
+        pc = httpx.get(f"{BASE}/api/portals/basic/config.json", headers=admin_auth).json()["portalConfig"]
+        return pc.get("mainMenu", {}).get("title", {}).get("text")
 
     pub = httpx.post(f"{BASE}/api/admin/portals/basic/publish", headers=adm).json()
     v1 = pub["version"]
     snaps = httpx.get(f"{BASE}/api/admin/portals/basic/snapshots", headers=adm).json()
     assert snaps["active_version"] == v1 and snaps["draft_dirty"] is False
     assert len(httpx.get(f"{BASE}/api/portals/basic/services.json").json()) == live_count
+    assert served_title() == "Snapshot V1"
     print(f"16. published basic v{v1}; served from snapshot, count unchanged ({live_count})")
 
-    # mutate the LIVE draft: secure a service. Snapshot must NOT change; draft goes dirty.
-    httpx.patch(f"{BASE}/api/admin/services/basic:453", headers=adm, json={"is_public": False})
-    served = {s["id"]: s for s in httpx.get(f"{BASE}/api/portals/basic/services.json").json()}
-    assert served["453"].get("isSecured") is not True, "snapshot leaked a live edit"
+    # CONTENT is frozen: a live draft title edit does NOT change the served snapshot.
+    httpx.patch(f"{BASE}/api/admin/portals/basic/settings", headers=adm, json={"title": {"text": "Draft Edit"}})
+    assert served_title() == "Snapshot V1", "snapshot leaked a live content edit"
     snaps = httpx.get(f"{BASE}/api/admin/portals/basic/snapshots", headers=adm).json()
     assert snaps["draft_dirty"] is True
-    print("17. live edit (secure basic:453) does NOT affect active snapshot; draft marked dirty")
+    print("17. live CONTENT edit (portal title) does NOT affect the active snapshot; draft marked dirty")
 
-    # publish v2 (now reflects the edit), then roll back to v1 (453 public again)
+    # SECURITY is live: securing a service hides it from anon IMMEDIATELY, even
+    # though the portal is published (proxy + config agree; no republish needed).
+    served = {s["id"]: s for s in httpx.get(f"{BASE}/api/portals/basic/services.json").json()}
+    assert "453" in served and served["453"].get("isSecured") is not True   # public in snapshot
+    httpx.patch(f"{BASE}/api/admin/services/basic:453", headers=adm, json={"is_public": False})
+    anon = {s["id"] for s in httpx.get(f"{BASE}/api/portals/basic/services.json").json()}
+    assert "453" not in anon, "securing a layer must hide it from anon at once, even when published"
+    adm_served = {s["id"]: s for s in httpx.get(f"{BASE}/api/portals/basic/services.json", headers=admin_auth).json()}
+    assert adm_served["453"].get("isSecured") is True
+    httpx.patch(f"{BASE}/api/admin/services/basic:453", headers=adm, json={"is_public": True})   # restore
+    print("17b. live SECURITY edit (secure basic:453) takes effect at once under the active snapshot")
+
+    # publish v2 (new title), then roll back to v1 → the CONTENT (title) is restored.
     v2 = httpx.post(f"{BASE}/api/admin/portals/basic/publish", headers=adm).json()["version"]
-    served = {s["id"]: s for s in httpx.get(f"{BASE}/api/portals/basic/services.json").json()}
-    assert served.get("453", {}).get("isSecured") is True or "453" not in served
+    assert served_title() == "Draft Edit"
     httpx.post(f"{BASE}/api/admin/portals/basic/activate", headers=adm, json={"version": v1})
-    served = {s["id"]: s for s in httpx.get(f"{BASE}/api/portals/basic/services.json").json()}
-    assert served["453"].get("isSecured") is not True, "rollback did not restore v1"
-    print(f"18. published v{v2} (453 secured), rolled back to v{v1} (453 public again)")
+    assert served_title() == "Snapshot V1", "rollback did not restore v1 content"
+    print(f"18. published v{v2} (new title), rolled back to v{v1} (title restored)")
 
     # --- Phase 5: ETag revalidation on published config (basic is published now)
     r1 = httpx.get(f"{BASE}/api/portals/basic/config.json")

@@ -21,22 +21,36 @@ class SlidingWindow:
         self.limit = limit
         self.window = window_s
         self._hits: dict[str, deque] = defaultdict(deque)
+        self._last_sweep = time.monotonic()
 
     def check(self, key: str) -> tuple[bool, int]:
         """Returns (allowed, retry_after_seconds)."""
         now = time.monotonic()
+        self._sweep(now)
         dq = self._hits[key]
         cutoff = now - self.window
         while dq and dq[0] <= cutoff:
             dq.popleft()
-        if not dq and key in self._hits:
-            # keep the dict from growing unbounded with idle callers
-            self._hits.pop(key, None)
-            dq = self._hits[key]
         if len(dq) >= self.limit:
             return False, int(self.window - (now - dq[0])) + 1
         dq.append(now)
         return True, 0
+
+    def _sweep(self, now: float):
+        """Drop callers with no hits left in the window. Bounds memory to
+        recently-active callers — without this a rotating X-Forwarded-For (or
+        just many one-off clients) would grow `_hits` unboundedly. Runs at most
+        once per window, so it's amortized O(1) per check."""
+        if now - self._last_sweep < self.window:
+            return
+        self._last_sweep = now
+        cutoff = now - self.window
+        for k in list(self._hits):
+            dq = self._hits[k]
+            while dq and dq[0] <= cutoff:
+                dq.popleft()
+            if not dq:
+                del self._hits[k]
 
 
 def client_key(request: Request) -> str:

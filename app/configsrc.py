@@ -53,6 +53,23 @@ def active_source(portal: Portal, db) -> dict:
     return snap.data
 
 
+def with_live_access(source: dict, db, catalog: str) -> dict:
+    """Overlay the LIVE `is_public` of each service onto a (possibly frozen)
+    source. Security state — who may see a service — must always be current, so
+    securing a layer takes effect immediately even on a published snapshot; the
+    snapshot still governs WHAT exists (attrs, layer tree, styles). This mirrors
+    role grants, which are already read live (service_grants). Without it, a
+    layer secured after publish stays advertised to anonymous users — the proxy
+    still blocks the tiles (it reads the live row), but services.json would leak
+    the layer's metadata and omit isSecured, breaking the client too.
+    """
+    live = {key: pub for key, pub in
+            db.query(Service.key, Service.is_public).filter(Service.catalog == catalog)}
+    services = [{**s, "is_public": live.get(s["key"], s["is_public"])}
+                for s in source["services"]]
+    return {**source, "services": services}
+
+
 def service_grants(db, catalog: str) -> dict[str, set[str]]:
     grants: dict[str, set[str]] = {}
     for row in db.query(ServiceRole).filter(ServiceRole.service_key.like(f"{catalog}:%")):

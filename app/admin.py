@@ -24,7 +24,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
+import defusedxml.ElementTree as DET
 import httpx
+from defusedxml.common import DefusedXmlException
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -40,6 +42,7 @@ from .proxy import _assert_allowed_upstream
 router = APIRouter()
 
 SESSION_COOKIE = "admin_session"
+LOGIN_STATE_COOKIE = "admin_login_state"   # binds the OAuth callback to the browser that started it
 CAPS_MAX_BYTES = 20 * 2**20
 SESSION_GC_GRACE = 86400   # drop sessions this many seconds past access expiry
 
@@ -76,7 +79,13 @@ def admin_login(request: Request, db: Session = Depends(db_session)):
     }
     if request.query_params.get("prompt") == "login":
         params["prompt"] = "login"   # force a fresh IdP prompt (switch account)
-    return RedirectResponse(f"{settings.OIDC_ISSUER}/protocol/openid-connect/auth?{urlencode(params)}")
+    resp = RedirectResponse(f"{settings.OIDC_ISSUER}/protocol/openid-connect/auth?{urlencode(params)}")
+    # Bind this flow to the browser: the callback must present the same state in
+    # a cookie, not just in the query string (CSRF / login-session-swap defense).
+    # SameSite=Lax so it survives the top-level redirect back from the IdP.
+    resp.set_cookie(LOGIN_STATE_COOKIE, state, max_age=600, httponly=True,
+                    secure=True, samesite="lax", path="/admin")
+    return resp
 
 
 def _denied_page(message: str) -> HTMLResponse:
@@ -95,7 +104,12 @@ def esc_html(s: str) -> str:
 
 
 @router.get("/admin/callback")
-def admin_callback(code: str, state: str, db: Session = Depends(db_session)):
+def admin_callback(code: str, state: str, request: Request, db: Session = Depends(db_session)):
+    # The state must match BOTH the server-side pending row (replay/validity)
+    # AND the cookie set at /admin/login (proves same browser started the flow).
+    cookie_state = request.cookies.get(LOGIN_STATE_COOKIE, "")
+    if not cookie_state or not secrets.compare_digest(cookie_state, state):
+        raise HTTPException(400, "login state mismatch")
     pending = db.get(AdminPendingLogin, state)
     if pending is None:
         raise HTTPException(400, "unknown or expired login state")
@@ -126,6 +140,7 @@ def admin_callback(code: str, state: str, db: Session = Depends(db_session)):
     response = RedirectResponse("/admin/")
     response.set_cookie(SESSION_COOKIE, sid, httponly=True, secure=True,
                         samesite="strict", path="/")
+    response.delete_cookie(LOGIN_STATE_COOKIE, path="/admin")
     return response
 
 
@@ -181,9 +196,11 @@ def require_admin(request: Request, db: Session = Depends(db_session)) -> dict:
         raise HTTPException(401, "admin session expired")
     if request.method != "GET":
         # CSRF belt on top of SameSite=Strict for cookie-authenticated writes.
-        origin = request.headers.get("Origin", "")
-        if origin and origin not in settings.PORTAL_ORIGINS:
-            raise HTTPException(403, "cross-origin admin mutation refused")
+        # Fail closed: a missing Origin is refused too (bearer/script callers
+        # returned above, so a cookie-authed write from a real browser always
+        # carries one).
+        if request.headers.get("Origin", "") not in settings.PORTAL_ORIGINS:
+            raise HTTPException(403, "cross-origin or origin-less admin mutation refused")
     return _validate_admin_access_token(session.access)
 
 
@@ -816,13 +833,21 @@ def import_capabilities(payload: dict = Body(...),
 
     base = urlunsplit(urlsplit(url)._replace(query="", fragment=""))
     try:
+        # Stream + cap so a multi-GB body can't exhaust memory before the check.
+        content, total = [], 0
         with httpx.Client(timeout=30, follow_redirects=False) as http:
-            response = http.get(base, params={"service": "WMS", "request": "GetCapabilities"})
-        response.raise_for_status()
-        if len(response.content) > CAPS_MAX_BYTES:
-            raise HTTPException(502, "capabilities document too large")
-        root = ET.fromstring(response.content)  # py3 ET refuses entity expansion
-    except (httpx.HTTPError, ET.ParseError) as exc:
+            with http.stream("GET", base,
+                             params={"service": "WMS", "request": "GetCapabilities"}) as response:
+                response.raise_for_status()
+                for chunk in response.iter_bytes():
+                    total += len(chunk)
+                    if total > CAPS_MAX_BYTES:
+                        raise HTTPException(502, "capabilities document too large")
+                    content.append(chunk)
+        # defusedxml: stdlib ET still expands internal entities (billion-laughs);
+        # this refuses DTDs/entities/external refs outright.
+        root = DET.fromstring(b"".join(content))
+    except (httpx.HTTPError, ET.ParseError, DefusedXmlException) as exc:
         raise HTTPException(502, f"capabilities fetch failed: {type(exc).__name__}") from exc
 
     version = root.get("version", "1.3.0")

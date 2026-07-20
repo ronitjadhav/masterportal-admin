@@ -3,8 +3,10 @@
 The Masterportal frontend decodes JWTs without checking signatures (its own
 code says so) — so this backend is the only place tokens are actually
 verified. Verification here is full: signature via the IdP's JWKS, issuer,
-expiry, and audience (Keycloak puts the client id in `azp` and often only
-"account" in `aud`, so either satisfying `aud` or `azp` is accepted).
+expiry, and audience. The audience is required in `aud` specifically (a
+dedicated API audience added by a Keycloak mapper) — there is deliberately NO
+`azp` fallback, since `azp` is the frontend client id and accepting it would
+collapse the portal/admin audience separation.
 """
 import threading
 

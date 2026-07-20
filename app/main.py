@@ -106,7 +106,7 @@ def config_json(slug: str, request: Request,
                 db: Session = Depends(db_session), _rl: None = Depends(_config_rate)):
     uroles = access.user_roles(user)
     portal = get_portal(slug, db, uroles)
-    source = configsrc.active_source(portal, db)
+    source = configsrc.with_live_access(configsrc.active_source(portal, db), db, portal.catalog)
     data = configsrc.build_config(source, configsrc.service_grants(db, portal.catalog),
                                   configsrc.module_restrictions(db, slug), uroles)
     return serve_config(data, request, portal)
@@ -118,7 +118,7 @@ def services_json(slug: str, request: Request,
                   db: Session = Depends(db_session), _rl: None = Depends(_config_rate)):
     uroles = access.user_roles(user)
     portal = get_portal(slug, db, uroles)
-    source = configsrc.active_source(portal, db)
+    source = configsrc.with_live_access(configsrc.active_source(portal, db), db, portal.catalog)
     data = configsrc.build_services(source, configsrc.service_grants(db, portal.catalog), uroles)
     return serve_config(data, request, portal)
 

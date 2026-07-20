@@ -51,6 +51,7 @@ browser ─┬─ Masterportal (static)      ── / ────────�
 
 **Docs:** operator/integration guide → [INTEGRATION.md](INTEGRATION.md) ·
 backup/restore & day-2 ops → [OPERATIONS.md](OPERATIONS.md) ·
+security posture (auditable) → [SECURITY.md](SECURITY.md) ·
 design decisions & roadmap → [PLAN.md](PLAN.md).
 
 ## Run it
