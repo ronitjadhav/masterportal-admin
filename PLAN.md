@@ -245,9 +245,16 @@ editable in the console. What remains is Phase 5 ops-hardening.
   `basic` auto-seeded, all routes reachable via `https://localhost:9001`. Going
   to real production changes only configuration (own IdP, managed Postgres, real
   certs, origin env) — not code.
-- **Next:** metrics, CI, backup/restore runbook, pen-test checklist. Promote
-  `_sessions`/`_pending_logins` + the rate-limit window out of in-process
-  dicts (Redis/DB) once more than one worker runs (that unlocks nginx replicas).
+- **DB-backed admin sessions (done 2026-07-20):** `_sessions`/`_pending_logins`
+  moved from process dicts to the `admin_sessions` / `admin_pending_logins`
+  tables (migration `a1b2c3d4e5f6`). Admins now stay logged in across restarts,
+  and the app is safe to run with multiple workers/replicas. Chose the existing
+  DB over adding Redis (YAGNI — a handful of admin sessions is trivial; note the
+  refresh tokens are now at rest in the DB, which must be protected regardless).
+  `test_sessions.py` proves persistence + expiry-cleanup + GC without Keycloak;
+  wired into CI. Only in-process state left: the rate-limit window (per-worker,
+  approximate — fine until it needs a shared store under heavy multi-worker use).
+- **Next:** metrics, backup/restore runbook, pen-test checklist.
 
 ## 8. Portal model & full config coverage (revised 2026-07-19)
 

@@ -11,8 +11,8 @@ Identity isolation (audit P0):
   header (belt on top of SameSite=Strict). Bearer-token calls (scripts, CI)
   skip cookies entirely.
 
-ponytail: sessions in a process dict — single worker; move to Redis/DB rows
-when running more than one process.
+Sessions live in the DB (admin_sessions / admin_pending_logins), so admins stay
+logged in across restarts and the app can run more than one worker.
 """
 import base64
 import copy
@@ -32,16 +32,16 @@ from sqlalchemy.orm import Session
 from . import access, configsrc, portalcfg, settings
 from .auth import roles as token_roles
 from .auth import validate_token
-from .db import (AuditLog, ModuleRole, Portal, PortalRole, Service,
-                 ServiceRole, Snapshot, Style, db_session, scoped_key)
+from .db import (AdminPendingLogin, AdminSession, AuditLog, ModuleRole, Portal,
+                 PortalRole, Service, ServiceRole, Snapshot, Style, db_session,
+                 scoped_key)
 from .proxy import _assert_allowed_upstream
 
 router = APIRouter()
 
-_sessions: dict[str, dict] = {}          # sid -> {access, refresh, exp}
-_pending_logins: dict[str, tuple] = {}   # state -> (verifier, created)
 SESSION_COOKIE = "admin_session"
 CAPS_MAX_BYTES = 20 * 2**20
+SESSION_GC_GRACE = 86400   # drop sessions this many seconds past access expiry
 
 
 def _now() -> int:
@@ -57,14 +57,14 @@ def admin_ui():
 
 
 @router.get("/admin/login")
-def admin_login(request: Request):
-    for state in [s for s, (_, t) in _pending_logins.items() if _now() - t > 600]:
-        del _pending_logins[state]
+def admin_login(request: Request, db: Session = Depends(db_session)):
+    db.query(AdminPendingLogin).filter(AdminPendingLogin.created < _now() - 600).delete()
     state = secrets.token_urlsafe(24)
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(
         hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
-    _pending_logins[state] = (verifier, _now())
+    db.add(AdminPendingLogin(state=state, verifier=verifier, created=_now()))
+    db.commit()
     params = {
         "response_type": "code",
         "client_id": settings.OIDC_ADMIN_CLIENT_ID,
@@ -95,16 +95,19 @@ def esc_html(s: str) -> str:
 
 
 @router.get("/admin/callback")
-def admin_callback(code: str, state: str):
-    pending = _pending_logins.pop(state, None)
+def admin_callback(code: str, state: str, db: Session = Depends(db_session)):
+    pending = db.get(AdminPendingLogin, state)
     if pending is None:
         raise HTTPException(400, "unknown or expired login state")
+    verifier = pending.verifier
+    db.delete(pending)          # one-shot
+    db.commit()
     tokens = httpx.post(settings.OIDC_TOKEN_URL, timeout=10, data={
         "grant_type": "authorization_code",
         "client_id": settings.OIDC_ADMIN_CLIENT_ID,
         "redirect_uri": f"{settings.PUBLIC_BASE_URL}/admin/callback",
         "code": code,
-        "code_verifier": pending[0],
+        "code_verifier": verifier,
     })
     if tokens.status_code != 200:
         raise HTTPException(401, f"token exchange failed: {tokens.text[:200]}")
@@ -115,12 +118,11 @@ def admin_callback(code: str, state: str):
         # wrong user / missing admin role: friendly page, not raw JSON
         return _denied_page(exc.detail if isinstance(exc.detail, str) else "Admin access required.")
 
+    db.query(AdminSession).filter(AdminSession.exp < _now() - SESSION_GC_GRACE).delete()
     sid = secrets.token_urlsafe(32)
-    _sessions[sid] = {
-        "access": tokens["access_token"],
-        "refresh": tokens.get("refresh_token"),
-        "exp": claims["exp"],
-    }
+    db.add(AdminSession(sid=sid, access=tokens["access_token"],
+                        refresh=tokens.get("refresh_token"), exp=claims["exp"]))
+    db.commit()
     response = RedirectResponse("/admin/")
     response.set_cookie(SESSION_COOKIE, sid, httponly=True, secure=True,
                         samesite="strict", path="/")
@@ -128,8 +130,10 @@ def admin_callback(code: str, state: str):
 
 
 @router.post("/admin/logout")
-def admin_logout(request: Request):
-    _sessions.pop(request.cookies.get(SESSION_COOKIE, ""), None)
+def admin_logout(request: Request, db: Session = Depends(db_session)):
+    db.query(AdminSession).filter(
+        AdminSession.sid == request.cookies.get(SESSION_COOKIE, "")).delete()
+    db.commit()
     response = RedirectResponse("/admin/", status_code=303)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
@@ -146,40 +150,41 @@ def _validate_admin_access_token(token: str) -> dict:
     return claims
 
 
-def _refresh_session(session: dict) -> bool:
-    if not session.get("refresh"):
+def _refresh_session(session: AdminSession, db: Session) -> bool:
+    if not session.refresh:
         return False
     tokens = httpx.post(settings.OIDC_TOKEN_URL, timeout=10, data={
         "grant_type": "refresh_token",
         "client_id": settings.OIDC_ADMIN_CLIENT_ID,
-        "refresh_token": session["refresh"],
+        "refresh_token": session.refresh,
     })
     if tokens.status_code != 200:
         return False
     tokens = tokens.json()
-    session["access"] = tokens["access_token"]
-    session["refresh"] = tokens.get("refresh_token", session["refresh"])
-    session["exp"] = _now() + int(tokens.get("expires_in", 300))
+    session.access = tokens["access_token"]
+    session.refresh = tokens.get("refresh_token", session.refresh)
+    session.exp = _now() + int(tokens.get("expires_in", 300))
+    db.commit()
     return True
 
 
-def require_admin(request: Request) -> dict:
+def require_admin(request: Request, db: Session = Depends(db_session)) -> dict:
     """Verified admin claims, from a bearer token or the BFF session cookie."""
     header = request.headers.get("Authorization", "")
     if header.startswith("Bearer "):
         return _validate_admin_access_token(header[len("Bearer "):])
 
-    session = _sessions.get(request.cookies.get(SESSION_COOKIE, ""))
+    session = db.get(AdminSession, request.cookies.get(SESSION_COOKIE, ""))
     if session is None:
         raise HTTPException(401, "admin login required")
-    if session["exp"] - 30 < _now() and not _refresh_session(session):
+    if session.exp - 30 < _now() and not _refresh_session(session, db):
         raise HTTPException(401, "admin session expired")
     if request.method != "GET":
         # CSRF belt on top of SameSite=Strict for cookie-authenticated writes.
         origin = request.headers.get("Origin", "")
         if origin and origin not in settings.PORTAL_ORIGINS:
             raise HTTPException(403, "cross-origin admin mutation refused")
-    return _validate_admin_access_token(session["access"])
+    return _validate_admin_access_token(session.access)
 
 
 # ---------------------------------------------------------------- helpers

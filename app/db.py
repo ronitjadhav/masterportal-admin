@@ -168,6 +168,32 @@ class AuditLog(Base):
     detail: Mapped[dict] = mapped_column(JSON)
 
 
+class AdminSession(Base):
+    """Server-side BFF session: the browser holds only an opaque sid cookie;
+    the live OIDC tokens stay here (never in JS). In the DB (not a process
+    dict) so admins stay logged in across restarts and the app can run more
+    than one worker. The DB already holds trusted config, but note it now also
+    holds live admin refresh tokens at rest — protect it accordingly.
+    """
+
+    __tablename__ = "admin_sessions"
+
+    sid: Mapped[str] = mapped_column(String, primary_key=True)
+    access: Mapped[str] = mapped_column(String)
+    refresh: Mapped[str | None] = mapped_column(String, nullable=True)
+    exp: Mapped[int] = mapped_column(Integer)      # access-token expiry (unix)
+
+
+class AdminPendingLogin(Base):
+    """In-flight OIDC login: state -> PKCE verifier, until the callback."""
+
+    __tablename__ = "admin_pending_logins"
+
+    state: Mapped[str] = mapped_column(String, primary_key=True)
+    verifier: Mapped[str] = mapped_column(String)
+    created: Mapped[int] = mapped_column(Integer)  # unix; expired after 10 min
+
+
 def init_db():
     """Bring the schema to head via Alembic (idempotent) — replaces
     create_all, so every schema change ships as a migration and existing data

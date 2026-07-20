@@ -107,9 +107,10 @@ configuration**, not code (`deploy/nginx.conf` + the `environment:` blocks are
 commented): point `OIDC_*` at your own IdP (and drop the bundled Keycloak),
 point `DATABASE_URL` at managed Postgres (and drop the bundled one), replace
 `deploy/certs` with real certificates, and set `PUBLIC_BASE_URL` /
-`PORTAL_ORIGINS` to your origin. The backend runs a **single worker** by design
-(admin sessions and rate-limit windows are in-process); front it with multiple
-replicas only once those move to Redis.
+`PORTAL_ORIGINS` to your origin. Admin sessions are stored in the DB (they
+survive restarts and are safe across **multiple workers/replicas** — add
+`--workers N` or scale the service); the only in-process state left is the
+rate-limit window, which just becomes per-worker until moved to a shared store.
 
 ## Wire a Masterportal to it
 
