@@ -83,6 +83,32 @@ Then open the **admin console** at <https://localhost:9001/admin/> (or
 `http://localhost:8000/admin/` standalone) and use **＋ New** to create a
 portal, or edit an imported one. API docs: `<host>/docs`.
 
+## Deploy the whole stack (one command, one origin)
+
+For a production-shaped run, `docker-compose.prod.yml` brings up **everything
+behind one https origin** via nginx: the backend (built from the `Dockerfile`),
+the admin console, the config API + `/geo` proxy, and a bundled Keycloak +
+Postgres.
+
+```bash
+sh deploy/gen-certs.sh                              # once: self-signed TLS cert
+docker compose -f docker-compose.prod.yml up --build
+# → admin console at https://localhost:9001/admin/  (accept the self-signed warning)
+```
+
+On first start the backend runs its migrations and auto-seeds `basic` into
+Postgres, so the stack is immediately usable. To serve a portal at `/`, mount
+your built Masterportal at `deploy/portal/` (see [INTEGRATION.md](INTEGRATION.md)).
+
+Everything is env-driven, so **going to real production changes only
+configuration**, not code (`deploy/nginx.conf` + the `environment:` blocks are
+commented): point `OIDC_*` at your own IdP (and drop the bundled Keycloak),
+point `DATABASE_URL` at managed Postgres (and drop the bundled one), replace
+`deploy/certs` with real certificates, and set `PUBLIC_BASE_URL` /
+`PORTAL_ORIGINS` to your origin. The backend runs a **single worker** by design
+(admin sessions and rate-limit windows are in-process); front it with multiple
+replicas only once those move to Redis.
+
 ## Wire a Masterportal to it
 
 A portal is a **stock** Masterportal whose `config.js` points its
@@ -90,7 +116,7 @@ A portal is a **stock** Masterportal whose `config.js` points its
 an OIDC `login` block; portal, backend and IdP must sit behind **one https
 origin** (dev: the vite proxy `masterportal/devtools/proxyconf.json`; prod:
 nginx). A worked example lives in the Masterportal repo at
-`portal/backend-demo/` (its `config.js` points at the `demo` portal). Full
+`portal/backend-demo/` (its `config.js` points at the `basic` portal). Full
 step-by-step for any portal — including creating a fresh one on a new project
 — is in **[INTEGRATION.md](INTEGRATION.md)**. The example's `config.js` points at
 the auto-seeded `basic` portal, so it works right after a first start.

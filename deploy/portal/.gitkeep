@@ -1,0 +1,4 @@
+Mount your built Masterportal here (its dist/ output + a portal folder whose
+config.js points portalConf/layerConf/restConf/styleConf at /api/portals/<slug>/…
+and adds the OIDC login block). Served at https://<origin>/ by nginx. See
+INTEGRATION.md. Until you add one, the admin console at /admin/ still works.

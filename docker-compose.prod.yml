@@ -1,0 +1,82 @@
+# The whole stack behind ONE https origin (nginx): the portal, the admin
+# console, the config API + geo proxy, and a bundled Keycloak + Postgres.
+#
+#   sh deploy/gen-certs.sh                          # once: TLS cert for the demo
+#   docker compose -f docker-compose.prod.yml up --build
+#   # → admin console at https://localhost:9001/admin/  (self-signed cert warning)
+#   #   mount your built Masterportal at ./deploy/portal to serve a portal at /
+#
+# PRODUCTION NOTES — the bundled Keycloak (start-dev) and the Postgres password
+# are demo-grade defaults. The app is IdP- and DB-agnostic, so for a real
+# deployment you change only environment:
+#   - point OIDC_ISSUER/DISCOVERY/JWKS/TOKEN at your own IdP (drop the keycloak
+#     service), and set the realm's valid redirect URIs to your origin;
+#   - point DATABASE_URL at managed Postgres (drop the postgres service);
+#   - replace deploy/certs with real certificates;
+#   - set PUBLIC_BASE_URL / PORTAL_ORIGINS / KC_HOSTNAME to your real origin.
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    environment:
+      # Public origin (what browsers see) — must match the tokens' issuer host.
+      PUBLIC_BASE_URL: https://localhost:9001
+      PORTAL_ORIGINS: https://localhost:9001
+      OIDC_ISSUER: https://localhost:9001/auth/realms/masterportal
+      # Internal URLs the backend uses server-side (compose network, plain http).
+      OIDC_DISCOVERY_URL: http://keycloak:8080/auth/realms/masterportal/.well-known/openid-configuration
+      OIDC_JWKS_URL: http://keycloak:8080/auth/realms/masterportal/protocol/openid-connect/certs
+      OIDC_TOKEN_URL: http://keycloak:8080/auth/realms/masterportal/protocol/openid-connect/token
+      DATABASE_URL: postgresql+psycopg://mpadmin:mpadmin@postgres:5432/masterportal_admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev --import-realm
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin        # dev only
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: https://localhost:9001/auth
+    expose:
+      - "8080"
+    volumes:
+      - ./keycloak/realm-masterportal.json:/opt/keycloak/data/import/realm-masterportal.json:ro
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mpadmin
+      POSTGRES_PASSWORD: mpadmin                 # dev only — use a secret in production
+      POSTGRES_DB: masterportal_admin
+    volumes:
+      - mp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mpadmin -d masterportal_admin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - keycloak
+    ports:
+      - "9001:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
+      - ./deploy/portal:/usr/share/nginx/portal:ro
+
+volumes:
+  mp_pgdata:

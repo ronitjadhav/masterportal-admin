@@ -236,9 +236,18 @@ editable in the console. What remains is Phase 5 ops-hardening.
   `logging`) because uvicorn's `disable_existing_loggers` kept silencing a
   named logger. Doesn't buffer streamed proxy responses. The DB `AuditLog`
   remains the authoritative actor trail; this is the traffic/latency stream.
+- **Deployment (done 2026-07-20):** `Dockerfile` (backend, single worker —
+  migrations + `basic` auto-seed on boot) and `docker-compose.prod.yml` bring
+  up the whole stack **behind one https origin** via nginx (`deploy/nginx.conf`):
+  portal static (mounted at `deploy/portal/`), admin console, config API + `/geo`
+  proxy, and bundled Keycloak + Postgres. `deploy/gen-certs.sh` makes a
+  self-signed cert for the demo. Verified end-to-end: fresh Postgres volume →
+  `basic` auto-seeded, all routes reachable via `https://localhost:9001`. Going
+  to real production changes only configuration (own IdP, managed Postgres, real
+  certs, origin env) — not code.
 - **Next:** metrics, CI, backup/restore runbook, pen-test checklist. Promote
   `_sessions`/`_pending_logins` + the rate-limit window out of in-process
-  dicts (Redis/DB) once more than one worker runs.
+  dicts (Redis/DB) once more than one worker runs (that unlocks nginx replicas).
 
 ## 8. Portal model & full config coverage (revised 2026-07-19)
 
