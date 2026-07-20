@@ -254,7 +254,12 @@ editable in the console. What remains is Phase 5 ops-hardening.
   `test_sessions.py` proves persistence + expiry-cleanup + GC without Keycloak;
   wired into CI. Only in-process state left: the rate-limit window (per-worker,
   approximate — fine until it needs a shared store under heavy multi-worker use).
-- **Next:** metrics, backup/restore runbook, pen-test checklist.
+- **Operations runbook (done 2026-07-20):** `OPERATIONS.md` — backup/restore for
+  Postgres (`pg_dump -Fc` / `pg_restore`, incl. the `+psycopg` URL-suffix strip)
+  and SQLite (`.backup`), what state lives where (one DB; sessions ephemeral;
+  secrets/realm/certs out-of-band), snapshots-vs-backups, disaster-recovery
+  steps, and a health/logs/scaling quick reference. Linked from the README.
+- **Next:** metrics, pen-test checklist.
 
 ## 8. Portal model & full config coverage (revised 2026-07-19)
 
