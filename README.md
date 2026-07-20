@@ -1,5 +1,7 @@
 # masterportal-admin
 
+[![CI](https://github.com/ronitjadhav/masterportal-admin/actions/workflows/ci.yml/badge.svg)](https://github.com/ronitjadhav/masterportal-admin/actions/workflows/ci.yml)
+
 A secure backend and admin console for [Masterportal](https://www.masterportal.org/).
 Instead of hand-editing static `config.json` / `services.json` files per portal,
 you manage everything through a database and a web console: portals, layers,
